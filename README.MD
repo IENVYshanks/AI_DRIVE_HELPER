@@ -13,8 +13,9 @@ AI Image Classifier is a full-stack face search application that:
 
 ## Stack
 
-- Frontend: Streamlit
-- Backend: FastAPI
+- Frontend: React / Vite in `frontend/`
+- Backend: FastAPI in `backend/`
+- Legacy companion UI: Streamlit in `backend/frontend.py`
 - Database: Postgres
 - Object storage: Supabase Storage
 - Vector database: Qdrant
@@ -37,33 +38,39 @@ AI Image Classifier is a full-stack face search application that:
 
 ```text
 .
-|-- frontend.py
-|-- main.py
-|-- requirements.txt
-|-- schema.sql
-|-- .env.example
-|-- .streamlit/
-|   `-- secrets.toml
-`-- src/
-    |-- config_env.py
-    |-- db/
-    |-- dependencies.py
-    |-- models/
-    |-- routers/
-    `-- services/
+|-- backend/
+|   |-- frontend.py
+|   |-- main.py
+|   |-- requirements.txt
+|   |-- schema.sql
+|   |-- .env.example
+|   |-- .streamlit/
+|   |   `-- secrets.toml
+|   `-- src/
+|       |-- config_env.py
+|       |-- db/
+|       |-- dependencies.py
+|       |-- models/
+|       |-- routers/
+|       `-- services/
+`-- frontend/
+    |-- package.json
+    |-- vite.config.ts
+    `-- src/
 ```
 
 Important modules:
 
-- [frontend.py](./frontend.py): Streamlit UI
-- [main.py](./main.py): FastAPI app entrypoint
-- [schema.sql](./schema.sql): relational schema reference
-- [src/routers/ingestion.py](./src/routers/ingestion.py): ingestion APIs
-- [src/routers/search.py](./src/routers/search.py): face search APIs
-- [src/services/ingestion_service.py](./src/services/ingestion_service.py): ingestion pipeline
-- [src/services/face_service.py](./src/services/face_service.py): InsightFace integration
-- [src/services/vector_service.py](./src/services/vector_service.py): Qdrant integration
-- [src/services/storage_service.py](./src/services/storage_service.py): Supabase Storage integration
+- [backend/frontend.py](./backend/frontend.py): Streamlit UI
+- [backend/main.py](./backend/main.py): FastAPI app entrypoint
+- [backend/schema.sql](./backend/schema.sql): relational schema reference
+- [backend/src/routers/ingestion.py](./backend/src/routers/ingestion.py): ingestion APIs
+- [backend/src/routers/search.py](./backend/src/routers/search.py): face search APIs
+- [backend/src/services/ingestion_service.py](./backend/src/services/ingestion_service.py): ingestion pipeline
+- [backend/src/services/face_service.py](./backend/src/services/face_service.py): InsightFace integration
+- [backend/src/services/vector_service.py](./backend/src/services/vector_service.py): Qdrant integration
+- [backend/src/services/storage_service.py](./backend/src/services/storage_service.py): Supabase Storage integration
+- [frontend/src](./frontend/src): React frontend source
 
 ## Architecture
 
@@ -99,7 +106,7 @@ Supabase Storage stores ingested image files. The backend returns signed URLs so
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values.
+Copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env.local`, then fill in the values.
 
 ### Database
 
@@ -139,6 +146,7 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 
 ```env
 BACKEND_URL=http://127.0.0.1:8000
+BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:8501,http://127.0.0.1:8501
 ```
 
 ### Google
@@ -148,15 +156,29 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_API_KEY=your_google_api_key
 ```
 
+For the React frontend, also set:
+
+```env
+VITE_BACKEND_URL=http://127.0.0.1:8000
+VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+```
+
+In Google Cloud Console, add these authorized JavaScript origins for local React development:
+
+```text
+http://localhost:5173
+http://127.0.0.1:5173
+```
+
 ## Streamlit Secrets
 
-The Streamlit login flow is configured in `.streamlit/secrets.toml`.
+The Streamlit login flow is configured in `backend/.streamlit/secrets.toml`.
 
 Important notes:
 
 - use `drive.readonly` if you want to browse Drive folders and files
 - restart Streamlit and sign in again after changing OAuth scopes
-- do not commit `.streamlit/secrets.toml`
+- do not commit `backend/.streamlit/secrets.toml`
 
 Example shape:
 
@@ -180,14 +202,21 @@ Create and activate a virtual environment, then install dependencies:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r backend\requirements.txt
+```
+
+Install frontend dependencies from the React app directory:
+
+```powershell
+Set-Location frontend
+npm install
 ```
 
 ## Database Schema
 
 Apply your schema to Postgres before running the backend.
 
-This project expects the schema represented in [schema.sql](./schema.sql).
+This project expects the schema represented in [backend/schema.sql](./backend/schema.sql).
 
 ## Running the App
 
@@ -195,6 +224,7 @@ This project expects the schema represented in [schema.sql](./schema.sql).
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+Set-Location backend
 uvicorn main:app --reload
 ```
 
@@ -202,16 +232,30 @@ Backend docs:
 
 - Swagger UI: `http://127.0.0.1:8000/docs`
 
-### 2. Start Streamlit
+### 2. Start React Frontend
 
 In a second terminal:
 
 ```powershell
+Set-Location frontend
+npm run dev
+```
+
+React frontend:
+
+- Vite app: `http://localhost:5173`
+
+### 3. Start Streamlit
+
+For the legacy Streamlit UI, use another terminal:
+
+```powershell
 .\.venv\Scripts\Activate.ps1
+Set-Location backend
 streamlit run frontend.py
 ```
 
-Frontend:
+Streamlit UI:
 
 - Streamlit app: `http://localhost:8501`
 
@@ -255,7 +299,7 @@ LOG_LEVEL=INFO
 ## Security Notes
 
 - Never commit `.env`
-- Never commit `.streamlit/secrets.toml`
+- Never commit `backend/.streamlit/secrets.toml`
 - Rotate any Google, Supabase, Qdrant, or database credentials if they were ever exposed
 - Keep `SUPABASE_SERVICE_ROLE_KEY` backend-only
 

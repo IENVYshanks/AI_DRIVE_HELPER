@@ -44,33 +44,55 @@ function LandingPage() {
   const [suName, setSuName] = useState("");
   const [suEmail, setSuEmail] = useState("");
   const [suPassword, setSuPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!siEmail || !siPassword) {
       toast.error("Enter email and password");
       return;
     }
-    signIn(siEmail, siPassword);
-    toast.success("Welcome back");
-    navigate({ to: "/dashboard" });
+    setAuthLoading(true);
+    try {
+      await signIn(siEmail, siPassword);
+      toast.success("Welcome back");
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Sign in failed");
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!suName || !suEmail || suPassword.length < 6) {
       toast.error("Fill all fields — password ≥ 6 chars");
       return;
     }
-    signUp(suName, suEmail, suPassword);
-    toast.success("Account created");
-    navigate({ to: "/dashboard" });
+    setAuthLoading(true);
+    try {
+      await signUp(suName, suEmail, suPassword);
+      toast.success("Account created");
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Account creation failed");
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
-  const handleGoogle = () => {
-    signInWithGoogle();
-    toast.success("Signed in with Google");
-    navigate({ to: "/dashboard" });
+  const handleGoogle = async () => {
+    setAuthLoading(true);
+    try {
+      await signInWithGoogle();
+      toast.success("Signed in with Google");
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Google sign-in failed");
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   return (
@@ -129,7 +151,7 @@ function LandingPage() {
                     <Input id="si-password" type="password" autoComplete="current-password"
                       value={siPassword} onChange={(e) => setSiPassword(e.target.value)} placeholder="••••••••" />
                   </div>
-                  <Button type="submit" className="w-full">Sign in</Button>
+                  <Button type="submit" className="w-full" disabled={authLoading}>Sign in</Button>
                 </form>
               </TabsContent>
 
@@ -147,7 +169,7 @@ function LandingPage() {
                     <Label htmlFor="su-password">Password</Label>
                     <Input id="su-password" type="password" value={suPassword} onChange={(e) => setSuPassword(e.target.value)} placeholder="At least 6 characters" />
                   </div>
-                  <Button type="submit" className="w-full">Create account</Button>
+                  <Button type="submit" className="w-full" disabled={authLoading}>Create account</Button>
                 </form>
               </TabsContent>
             </Tabs>
@@ -158,7 +180,7 @@ function LandingPage() {
               <div className="flex-1 border-t border-border" />
             </div>
 
-            <Button variant="outline" className="w-full" onClick={handleGoogle}>
+            <Button variant="outline" className="w-full" onClick={handleGoogle} disabled={authLoading}>
               <GoogleIcon />
               <span className="ml-2">Continue with Google</span>
             </Button>

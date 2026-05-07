@@ -1,11 +1,12 @@
 .env
 .env.*
 !.env.example
-.streamlit/secrets.toml
+**/.streamlit/secrets.toml
 .venv/
 __pycache__/
 *.py[cod]
 logs/
+downloads/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

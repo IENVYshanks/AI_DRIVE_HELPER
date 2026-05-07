@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: str = "logs/app.log"
     LOG_TO_CONSOLE: bool = True
+    BACKEND_CORS_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:8501,http://127.0.0.1:8501"
+    )
 
     SUPABASE_URL: str | None = None
     SUPABASE_SERVICE_ROLE_KEY: str | None = None
@@ -62,6 +66,14 @@ class Settings(BaseSettings):
             f"{password}@{self.DATABASE_HOST}:"
             f"{self.DB_PORT}/{database}?sslmode={self.DB_SSLMODE}"
         )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.BACKEND_CORS_ORIGINS.split(",")
+            if origin.strip()
+        ]
 
 
 @lru_cache

@@ -1,4 +1,5 @@
 import jwt
+import requests
 from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -30,7 +31,7 @@ class RefreshRequest(BaseModel):
 
 
 class GoogleSessionRequest(BaseModel):
-    email: str
+    email: str | None = None
     name: str | None = None
     avatar_url: str | None = None
     google_id: str | None = None
@@ -55,6 +56,26 @@ def build_token_response(user: User) -> TokenResponse:
         access_token=create_access_token(subject),
         refresh_token=create_refresh_token(subject),
     )
+
+
+def fetch_google_userinfo(access_token: str) -> dict:
+    response = requests.get(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google access token",
+        )
+    payload = response.json()
+    if not payload.get("email"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google account email is required",
+        )
+    return payload
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -98,21 +119,27 @@ async def create_google_session(
     payload: GoogleSessionRequest,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
+    google_user = await run_in_threadpool(fetch_google_userinfo, payload.drive_access_token)
+    email = google_user["email"]
+    name = google_user.get("name") or payload.name
+    avatar_url = google_user.get("picture") or payload.avatar_url
+    google_id = google_user.get("sub") or payload.google_id
+
     user = await run_in_threadpool(
-        lambda: db.query(User).filter(User.email == payload.email).first()
+        lambda: db.query(User).filter(User.email == email).first()
     )
     if user is None:
         user = User(
-            email=payload.email,
-            name=payload.name,
-            avatar_url=payload.avatar_url,
-            google_id=payload.google_id,
+            email=email,
+            name=name,
+            avatar_url=avatar_url,
+            google_id=google_id,
         )
         await run_in_threadpool(db.add, user)
     else:
-        user.name = payload.name or user.name
-        user.avatar_url = payload.avatar_url or user.avatar_url
-        user.google_id = payload.google_id or user.google_id
+        user.name = name or user.name
+        user.avatar_url = avatar_url or user.avatar_url
+        user.google_id = google_id or user.google_id
 
     user.drive_access_token = payload.drive_access_token
     user.drive_refresh_token = payload.drive_refresh_token or user.drive_refresh_token

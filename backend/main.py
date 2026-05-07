@@ -4,6 +4,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from src.db.database import engine
@@ -38,6 +39,13 @@ if settings.AUTO_CREATE_TABLES:
     Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AI Image Classifier API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(auth_router)
 app.include_router(ingestion_router)
 app.include_router(search_router)
