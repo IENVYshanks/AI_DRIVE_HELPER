@@ -5,12 +5,20 @@ import { Upload, HardDrive, FolderOpen, X } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { RequireAuth } from "@/components/require-auth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  startFolderIngestion,
+  upsertDriveFolder,
+  type IngestionJobResponse,
+} from "@/lib/api";
 import { fileToDataUrl } from "@/lib/photo-store";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "Upload — Atelier" },
+      { title: "Upload - Atelier" },
       { name: "description", content: "Upload photos from your device or Google Drive." },
     ],
   }),
@@ -21,12 +29,18 @@ type PendingFile = { file: File; previewUrl: string };
 
 function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<PendingFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [driveFolderId, setDriveFolderId] = useState("");
+  const [driveFolderName, setDriveFolderName] = useState("");
+  const [driveJob, setDriveJob] = useState<IngestionJobResponse | null>(null);
+  const [driveLoading, setDriveLoading] = useState(false);
 
   const addFiles = (list: FileList | File[]) => {
-    const incoming = Array.from(list).filter((f) => f.type.startsWith("image/"));
+    const incoming = Array.from(list).filter((file) => file.type.startsWith("image/"));
     if (!incoming.length) {
       toast.error("Please choose image files");
       return;
@@ -35,24 +49,53 @@ function DashboardPage() {
     setFiles((prev) => [...prev, ...mapped]);
   };
 
-  const removeAt = (i: number) => {
+  const removeAt = (index: number) => {
     setFiles((prev) => {
       const next = [...prev];
-      URL.revokeObjectURL(next[i].previewUrl);
-      next.splice(i, 1);
+      URL.revokeObjectURL(next[index].previewUrl);
+      next.splice(index, 1);
       return next;
     });
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+    if (event.dataTransfer.files?.length) addFiles(event.dataTransfer.files);
   };
 
   const handleGoogleDrive = () => {
-    // Mock: real implementation would use Google Picker API.
-    toast.info("Google Drive picker — wire up Google API on your MERN backend.");
+    folderInputRef.current?.focus();
+  };
+
+  const handleDriveIngestion = async () => {
+    const folderId = driveFolderId.trim();
+    if (!folderId) {
+      toast.error("Enter a Google Drive folder ID");
+      return;
+    }
+    if (!user?.backendAccessToken) {
+      toast.error("Sign in with Google before starting Drive ingestion");
+      return;
+    }
+
+    setDriveLoading(true);
+    try {
+      const folder = await upsertDriveFolder(
+        user.backendAccessToken,
+        folderId,
+        driveFolderName.trim() || undefined,
+      );
+      const job = await startFolderIngestion(user.backendAccessToken, folder.id);
+      setDriveJob(job);
+      sessionStorage.setItem("photovault.ingestionJobId", job.id);
+      toast.success("Drive ingestion started");
+      navigate({ to: "/progress" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not start Drive ingestion");
+    } finally {
+      setDriveLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -60,13 +103,12 @@ function DashboardPage() {
       toast.error("Select at least one photo");
       return;
     }
-    // Convert to data URLs so the progress page can persist them client-side.
     const prepared = await Promise.all(
-      files.map(async (p) => ({
+      files.map(async (item) => ({
         id: crypto.randomUUID(),
-        name: p.file.name,
-        dataUrl: await fileToDataUrl(p.file),
-      }))
+        name: item.file.name,
+        dataUrl: await fileToDataUrl(item.file),
+      })),
     );
     sessionStorage.setItem("photovault.pending", JSON.stringify(prepared));
     navigate({ to: "/progress" });
@@ -81,13 +123,56 @@ function DashboardPage() {
             <p className="text-xs uppercase tracking-[0.2em] text-ochre">Upload</p>
             <h1 className="mt-2 font-serif text-4xl sm:text-5xl">Bring your photos home.</h1>
             <p className="mt-3 max-w-xl text-muted-foreground">
-              Drop images below, or pull them in from Google Drive. We'll process them
-              one by one on the next screen.
+              Drop images below, or pull them in from Google Drive. The Drive path is connected to the FastAPI backend.
             </p>
           </div>
 
+          <section className="mb-8 rounded-2xl border border-border bg-paper p-6 shadow-soft">
+            <div className="flex items-start gap-3">
+              <HardDrive className="mt-1 h-5 w-5 text-primary" />
+              <div>
+                <p className="font-serif text-xl">Google Drive ingestion</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Paste a Drive folder ID. The backend uses your Google token to ingest image files from that folder.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="drive-folder-id">Folder ID</Label>
+                <Input
+                  ref={folderInputRef}
+                  id="drive-folder-id"
+                  value={driveFolderId}
+                  onChange={(event) => setDriveFolderId(event.target.value)}
+                  placeholder="Google Drive folder ID"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="drive-folder-name">Folder name</Label>
+                <Input
+                  id="drive-folder-name"
+                  value={driveFolderName}
+                  onChange={(event) => setDriveFolderName(event.target.value)}
+                  placeholder="Optional"
+                />
+              </div>
+              <Button onClick={handleDriveIngestion} disabled={driveLoading}>
+                Start ingestion
+              </Button>
+            </div>
+            {driveJob && (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Job {driveJob.id} started with status {driveJob.status}.
+              </p>
+            )}
+          </section>
+
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOver(true);
+            }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             className={`relative overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
@@ -117,7 +202,7 @@ function DashboardPage() {
                   multiple
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => e.target.files && addFiles(e.target.files)}
+                  onChange={(event) => event.target.files && addFiles(event.target.files)}
                 />
               </div>
             </div>
@@ -134,11 +219,11 @@ function DashboardPage() {
                 </Button>
               </div>
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-                {files.map((f, i) => (
-                  <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-border shadow-soft">
-                    <img src={f.previewUrl} alt={f.file.name} className="h-full w-full object-cover" loading="lazy" />
+                {files.map((item, index) => (
+                  <div key={index} className="group relative aspect-square overflow-hidden rounded-lg border border-border shadow-soft">
+                    <img src={item.previewUrl} alt={item.file.name} className="h-full w-full object-cover" loading="lazy" />
                     <button
-                      onClick={() => removeAt(i)}
+                      onClick={() => removeAt(index)}
                       aria-label="Remove"
                       className="absolute right-1.5 top-1.5 rounded-full bg-background/90 p-1 opacity-0 shadow-soft transition-opacity group-hover:opacity-100 focus:opacity-100"
                     >

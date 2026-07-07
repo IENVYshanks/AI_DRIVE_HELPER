@@ -1,3 +1,10 @@
+import {
+  createGoogleSession,
+  loginUser,
+  registerUser,
+  type BackendTokenResponse,
+} from "@/lib/api";
+
 export type User = {
   id: string;
   email: string;
@@ -19,12 +26,6 @@ type GoogleUserInfo = {
   email: string;
   name?: string;
   picture?: string;
-};
-
-type BackendTokenResponse = {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
 };
 
 type GoogleTokenClient = {
@@ -57,9 +58,6 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive.readonly",
 ].join(" ");
 
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, "") || "http://127.0.0.1:8000";
-
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export function getUser(): User | null {
@@ -76,21 +74,6 @@ function saveUser(user: User): User {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   window.dispatchEvent(new Event("auth-change"));
   return user;
-}
-
-async function postBackendSession(googleAccessToken: string): Promise<BackendTokenResponse> {
-  const response = await fetch(`${BACKEND_URL}/auth/google/session`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ drive_access_token: googleAccessToken }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Backend Google session failed");
-  }
-
-  return response.json() as Promise<BackendTokenResponse>;
 }
 
 async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
@@ -160,17 +143,7 @@ async function requestGoogleAccessToken(): Promise<string> {
 }
 
 export async function signIn(email: string, _password: string): Promise<User> {
-  const response = await fetch(`${BACKEND_URL}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-
-  if (!response.ok) {
-    throw new Error("User not found");
-  }
-
-  const tokenPayload = (await response.json()) as BackendTokenResponse;
+  const tokenPayload = await loginUser(email);
   return saveUser({
     id: email,
     email,
@@ -181,18 +154,7 @@ export async function signIn(email: string, _password: string): Promise<User> {
 }
 
 export async function signUp(name: string, email: string, _password: string): Promise<User> {
-  const response = await fetch(`${BACKEND_URL}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, name }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Account creation failed");
-  }
-
-  const tokenPayload = (await response.json()) as BackendTokenResponse;
+  const tokenPayload = await registerUser(email, name);
   return saveUser({
     id: email,
     email,
@@ -206,7 +168,7 @@ export async function signInWithGoogle(): Promise<User> {
   const googleAccessToken = await requestGoogleAccessToken();
   const [googleUser, tokenPayload] = await Promise.all([
     fetchGoogleUserInfo(googleAccessToken),
-    postBackendSession(googleAccessToken),
+    createGoogleSession(googleAccessToken),
   ]);
 
   return saveUser({

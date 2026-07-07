@@ -15,40 +15,54 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { fileToDataUrl, getPhotos, type StoredPhoto } from "@/lib/photo-store";
+import { useAuth } from "@/hooks/use-auth";
+import { searchFaces, type SearchQueryResponse } from "@/lib/api";
+import { fileToDataUrl } from "@/lib/photo-store";
 
 export const Route = createFileRoute("/query")({
   head: () => ({
     meta: [
-      { title: "Find by photo — Atelier" },
+      { title: "Find by photo - Atelier" },
       { name: "description", content: "Show us a photo, find the ones that look like it." },
     ],
   }),
   component: QueryPage,
 });
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [metadata, base64] = dataUrl.split(",");
+  const mime = metadata.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
 function QueryPage() {
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [queryImage, setQueryImage] = useState<string | null>(null);
+  const [queryFile, setQueryFile] = useState<File | Blob | null>(null);
   const [count, setCount] = useState<number>(6);
-  const [results, setResults] = useState<StoredPhoto[] | null>(null);
-  const [library, setLibrary] = useState<StoredPhoto[]>([]);
+  const [results, setResults] = useState<SearchQueryResponse | null>(null);
+  const [searching, setSearching] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
 
   useEffect(() => {
-    setLibrary(getPhotos());
     if (typeof window !== "undefined") setShareUrl(window.location.href);
   }, []);
 
   const handlePick = async (file: File) => {
     const url = await fileToDataUrl(file);
     setQueryImage(url);
+    setQueryFile(file);
     setResults(null);
   };
 
@@ -68,7 +82,7 @@ function QueryPage() {
   };
 
   const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setCameraOpen(false);
   };
@@ -84,24 +98,37 @@ function QueryPage() {
     ctx.drawImage(video, 0, 0);
     const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     setQueryImage(dataUrl);
+    setQueryFile(dataUrlToBlob(dataUrl));
     setResults(null);
     stopCamera();
   };
 
   useEffect(() => () => stopCamera(), []);
 
-  const runSearch = () => {
-    if (!queryImage) {
+  const runSearch = async () => {
+    if (!queryFile) {
       toast.error("Add a photo first");
       return;
     }
-    if (!library.length) {
-      toast.error("Upload some photos first");
+    if (!user?.backendAccessToken) {
+      toast.error("Sign in with Google before searching");
       return;
     }
-    // Mock similarity: shuffled subset. Real backend returns vector-similar results.
-    const shuffled = [...library].sort(() => Math.random() - 0.5);
-    setResults(shuffled.slice(0, Math.min(count, shuffled.length)));
+
+    setSearching(true);
+    try {
+      const response = await searchFaces(user.backendAccessToken, queryFile, count);
+      setResults(response);
+      if (!response.face_detected) {
+        toast.error("No face detected in the query image");
+      } else {
+        toast.success(`Found ${response.results_count} result${response.results_count === 1 ? "" : "s"}`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Search failed");
+    } finally {
+      setSearching(false);
+    }
   };
 
   const copyShare = async () => {
@@ -122,7 +149,7 @@ function QueryPage() {
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-ochre">Find by photo</p>
               <h1 className="mt-2 font-serif text-4xl sm:text-5xl">Show us a frame.</h1>
-              <p className="mt-2 text-muted-foreground">We'll find the ones that look like it.</p>
+              <p className="mt-2 text-muted-foreground">The backend will search your ingested face embeddings.</p>
             </div>
 
             <Dialog open={shareOpen} onOpenChange={setShareOpen}>
@@ -154,7 +181,6 @@ function QueryPage() {
             </Dialog>
           </div>
 
-          {/* Upload / preview */}
           <section className="grid gap-6 md:grid-cols-[1fr_1fr]">
             <div className="rounded-2xl border border-border bg-paper p-6 shadow-soft">
               <p className="font-serif text-xl">Your query image</p>
@@ -181,14 +207,7 @@ function QueryPage() {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => e.target.files?.[0] && handlePick(e.target.files[0])}
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
+                  onChange={(event) => event.target.files?.[0] && handlePick(event.target.files[0])}
                 />
               </div>
             </div>
@@ -206,33 +225,48 @@ function QueryPage() {
                   min={1}
                   max={24}
                   step={1}
-                  onValueChange={(v) => setCount(v[0])}
+                  onValueChange={(value) => setCount(value[0])}
                 />
               </div>
-              <Button size="lg" className="mt-8 w-full" onClick={runSearch}>
+              <Button size="lg" className="mt-8 w-full" onClick={runSearch} disabled={searching}>
                 <Sparkles className="mr-2 h-4 w-4" />
                 Find similar
               </Button>
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Wire your MERN backend's similarity API into <code className="text-foreground">runSearch()</code>.
-              </p>
             </div>
           </section>
 
-          {/* Results */}
           {results && (
             <section className="mt-12">
               <div className="mb-4 flex items-end justify-between">
                 <h2 className="font-serif text-2xl">Matches</h2>
-                <span className="text-sm text-muted-foreground">{results.length} results</span>
+                <span className="text-sm text-muted-foreground">{results.results_count} results</span>
               </div>
-              {results.length === 0 ? (
-                <p className="text-muted-foreground">No photos in your library yet.</p>
+              {results.results.length === 0 ? (
+                <p className="text-muted-foreground">No similar faces were found.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                  {results.map((p) => (
-                    <div key={p.id} className="group aspect-square overflow-hidden rounded-lg border border-border shadow-soft">
-                      <img src={p.dataUrl} alt={p.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                  {results.results.map((item) => (
+                    <div key={item.id} className="group overflow-hidden rounded-lg border border-border shadow-soft">
+                      <div className="aspect-square overflow-hidden bg-background">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.image_name || item.drive_file_id || "Search result"}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
+                            No preview URL
+                          </div>
+                        )}
+                      </div>
+                      <div className="border-t border-border bg-paper p-3">
+                        <p className="truncate text-sm font-medium">{item.image_name || item.drive_file_id}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Score {item.similarity_score?.toFixed(4) || "n/a"}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -240,8 +274,7 @@ function QueryPage() {
             </section>
           )}
 
-          {/* Camera dialog */}
-          <Dialog open={cameraOpen} onOpenChange={(o) => !o && stopCamera()}>
+          <Dialog open={cameraOpen} onOpenChange={(open) => !open && stopCamera()}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle className="font-serif">Capture a photo</DialogTitle>
