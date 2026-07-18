@@ -4,6 +4,7 @@ import {
   registerUser,
   type BackendTokenResponse,
 } from "@/lib/api";
+import { AUTH_STORAGE_KEY } from "@/lib/storage-keys";
 
 export type User = {
   id: string;
@@ -49,7 +50,6 @@ declare global {
   }
 }
 
-const USER_KEY = "photovault.user";
 const GOOGLE_SCRIPT_ID = "google-identity-services";
 const GOOGLE_SCOPES = [
   "openid",
@@ -63,7 +63,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 export function getUser(): User | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(USER_KEY);
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     return raw ? (JSON.parse(raw) as User) : null;
   } catch {
     return null;
@@ -71,7 +71,7 @@ export function getUser(): User | null {
 }
 
 function saveUser(user: User): User {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
   window.dispatchEvent(new Event("auth-change"));
   return user;
 }
@@ -182,7 +182,7 @@ export async function signInWithGoogle(): Promise<User> {
   });
 }
 
-export function signOut() {
-  localStorage.removeItem(USER_KEY);
+export function signOut(): void {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
   window.dispatchEvent(new Event("auth-change"));
 }

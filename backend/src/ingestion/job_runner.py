@@ -1,3 +1,10 @@
+"""Coordinate one folder-level ingestion job from start to completion.
+
+The API creates a queued job, then runs this function in a background task with
+its own database session. This layer owns folder/job lifecycle state while the
+file processor owns the work and transaction for each individual image.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_ingestion_job(db: Session, *, job_id) -> IngestionJob:
+    """Run discovery, processing, one retry pass, and final status updates."""
     job = db.query(IngestionJob).filter(IngestionJob.id == job_id).first()
     if job is None:
         raise ValueError("Ingestion job not found")
@@ -38,10 +46,12 @@ def run_ingestion_job(db: Session, *, job_id) -> IngestionJob:
 
     try:
         logger.info("Starting ingestion job_id=%s user_id=%s", job.id, job.user_id)
+        # Folder and job state must advance together in one transaction.
         mark_job_running(db, job, auto_commit=False)
         mark_folder_processing(db, folder, auto_commit=False)
         db.commit()
 
+        # Discovery happens once so both progress counters share the same total.
         drive_files = drive_service.list_images_in_folder(
             folder.drive_folder_id,
             job.user_id,
@@ -64,6 +74,8 @@ def run_ingestion_job(db: Session, *, job_id) -> IngestionJob:
             drive_files=drive_files,
             attempt_label="initial",
         )
+        # A single immediate retry handles transient Drive/model/storage errors
+        # without allowing a permanently bad file to loop forever.
         final_failures = retry_failed_files(
             db,
             job=job,
@@ -72,9 +84,14 @@ def run_ingestion_job(db: Session, *, job_id) -> IngestionJob:
         )
         record_final_failures(db, job=job, folder=folder, failures=final_failures)
 
+        # File processing commits in its own transactions. Reload aggregates so
+        # final status decisions use the values actually stored in Postgres.
         job = db.query(IngestionJob).filter(IngestionJob.id == job.id).first()
         folder = db.query(UserFolder).filter(UserFolder.id == folder.id).first()
         if job.failed and job.processed == 0:
+            # All-file failure gets an explicit fallback message. Partial
+            # failures continue below, where the recorded error causes the
+            # normal completion helpers to preserve a failed terminal status.
             error_message = job.error_message or "All files failed during ingestion"
             mark_folder_failed(db, folder, error_message, auto_commit=False)
             mark_job_failed(db, job, error_message, auto_commit=False)
@@ -93,6 +110,8 @@ def run_ingestion_job(db: Session, *, job_id) -> IngestionJob:
         )
         return job
     except Exception as exc:
+        # Roll back the interrupted unit of work, then persist terminal failure
+        # state in a fresh transaction so progress does not remain "running".
         db.rollback()
         logger.exception("Unhandled ingestion failure job_id=%s: %s", job.id, exc)
         if folder is not None:

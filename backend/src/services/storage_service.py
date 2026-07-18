@@ -1,3 +1,9 @@
+"""Supabase object-storage access for ingested image bytes.
+
+Postgres stores each returned object path on the Image row. API responses turn
+that path into a temporary signed URL so the storage bucket can remain private.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -10,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def storage_is_configured() -> bool:
+    """Return whether all settings required for storage operations are present."""
     settings = get_settings()
     return bool(
         settings.SUPABASE_URL
@@ -25,6 +32,11 @@ def upload_image(
     image_bytes: bytes,
     mime_type: str | None = None,
 ) -> str:
+    """Upsert image bytes under a stable user/image path and return that path.
+
+    A stable key makes re-ingestion replace the object rather than producing
+    orphaned duplicates. The database stores this key, not a temporary URL.
+    """
     settings = get_settings()
     content_type = mime_type or "image/jpeg"
     file_extension = _guess_extension(content_type)
@@ -47,11 +59,13 @@ def upload_image(
 
 
 def download_image(file_path: str) -> bytes:
+    """Read a private stored object as raw bytes."""
     logger.debug("Downloading image from Supabase Storage path=%s", file_path)
     return _get_storage_bucket().download(file_path)
 
 
 def get_signed_url(file_path: str, expires_in: int = 3600) -> str:
+    """Create a temporary browser-accessible URL for a private object."""
     logger.debug("Creating signed URL for path=%s expires_in=%s", file_path, expires_in)
     response = _get_storage_bucket().create_signed_url(
         path=file_path,
@@ -61,16 +75,19 @@ def get_signed_url(file_path: str, expires_in: int = 3600) -> str:
 
 
 def delete_image(file_path: str) -> None:
+    """Remove an object from the configured bucket."""
     logger.info("Deleting image from Supabase Storage path=%s", file_path)
     _get_storage_bucket().remove([file_path])
 
 
 @lru_cache
 def _get_supabase_client():
+    """Create one reusable Supabase client after validating configuration."""
     settings = get_settings()
     if not storage_is_configured():
         raise RuntimeError("Supabase Storage is not configured")
 
+    # Lazy import keeps modules that do not use storage lighter to import.
     from supabase import create_client
 
     return create_client(
@@ -80,11 +97,13 @@ def _get_supabase_client():
 
 
 def _get_storage_bucket():
+    """Return the configured bucket API from the cached client."""
     settings = get_settings()
     return _get_supabase_client().storage.from_(settings.SUPABASE_STORAGE_BUCKET)
 
 
 def _normalize_supabase_url(url: str) -> str:
+    """Convert storage-host URLs to the project API URL expected by the SDK."""
     trimmed = url.strip().rstrip("/")
     if ".storage.supabase.co" not in trimmed:
         return trimmed
@@ -97,6 +116,7 @@ def _normalize_supabase_url(url: str) -> str:
 
 
 def _guess_extension(mime_type: str) -> str:
+    """Map a MIME type to a safe file extension for the storage key."""
     extension = mimetypes.guess_extension(mime_type, strict=False)
     if extension == ".jpe":
         return ".jpg"

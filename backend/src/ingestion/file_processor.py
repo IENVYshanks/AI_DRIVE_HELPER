@@ -1,3 +1,11 @@
+"""Process one Drive image across all persistence systems.
+
+For each file the pipeline updates Postgres state, downloads from Drive,
+optionally copies bytes to Supabase, detects faces, writes vectors to Qdrant,
+and advances job/folder counters. Each file is isolated so one bad image does
+not abort the rest of a folder.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -43,6 +51,11 @@ def process_drive_file(
     drive_file: dict,
     attempt_label: str,
 ) -> FileProcessResult:
+    """Process one Drive file and convert exceptions into retryable results.
+
+    Success and failure are returned as data because the folder runner needs to
+    collect failures for one retry pass instead of stopping at the first error.
+    """
     started_at = perf_counter()
     try:
         drive_file_id = _get_drive_file_id(drive_file)
@@ -52,6 +65,8 @@ def process_drive_file(
             _mark_file_skipped(db, job, folder, drive_file_id, attempt_label)
             return FileProcessResult(drive_file=drive_file)
 
+        # The order matters: create relational identity first, then external
+        # objects can consistently use the image/face IDs as stable keys.
         image = _prepare_image_for_processing(db, job, folder, drive_file)
         image_bytes = _download_drive_file(db, job, drive_file_id)
         _store_image_if_configured(db, job, image, image_bytes)
@@ -80,6 +95,7 @@ def process_drive_file(
 
 
 def _get_drive_file_id(drive_file: dict) -> str:
+    """Validate and return the metadata identifier required by all later steps."""
     drive_file_id = drive_file.get("id")
     if not drive_file_id:
         raise ValueError("Drive file is missing required id")
@@ -92,6 +108,7 @@ def _log_file_processing_started(
     drive_file_id: str,
     attempt_label: str,
 ) -> None:
+    """Write a consistent start event for initial and retry attempts."""
     logger.info(
         "Processing Drive file_id=%s name=%s for job_id=%s attempt=%s",
         drive_file_id,
@@ -107,6 +124,7 @@ def _prepare_image_for_processing(
     folder: UserFolder,
     drive_file: dict,
 ) -> Image:
+    """Upsert Drive metadata and stage the image as processing."""
     image = upsert_image_from_drive_file(
         db,
         user_id=job.user_id,
@@ -124,6 +142,7 @@ def _should_skip_already_ingested_file(
     drive_file: dict,
     drive_file_id: str,
 ) -> bool:
+    """Skip an unchanged file that previously completed successfully."""
     if not get_settings().SKIP_ALREADY_INGESTED:
         return False
 
@@ -132,6 +151,7 @@ def _should_skip_already_ingested_file(
         user_id=job.user_id,
         drive_file_id=drive_file_id,
     )
+    # Name, MIME type, and size form the available Drive change fingerprint.
     return bool(
         image
         and image.status == "done"
@@ -146,6 +166,7 @@ def _mark_file_skipped(
     drive_file_id: str,
     attempt_label: str,
 ) -> None:
+    """Count a valid unchanged image as processed without re-running models."""
     increment_job_processed(db, job, auto_commit=False)
     increment_folder_processed(db, folder, auto_commit=False)
     db.commit()
@@ -158,7 +179,12 @@ def _mark_file_skipped(
 
 
 def _download_drive_file(db: Session, job: IngestionJob, drive_file_id: str) -> bytes:
-    return drive_service.download_file_bytes(drive_file_id, job.user_id, db)
+    """Download bytes using the Drive credentials stored for the job's user."""
+    image_bytes = drive_service.download_file_bytes(drive_file_id, job.user_id, db)
+    max_bytes = get_settings().MAX_INGESTION_IMAGE_BYTES
+    if len(image_bytes) > max_bytes:
+        raise ValueError(f"Drive image exceeds the {max_bytes}-byte ingestion limit")
+    return image_bytes
 
 
 def _store_image_if_configured(
@@ -167,7 +193,10 @@ def _store_image_if_configured(
     image: Image,
     image_bytes: bytes,
 ) -> None:
+    """Copy bytes to Supabase and stage its stable address on the Image row."""
     if not storage_is_configured():
+        # Storage is optional for processing; embeddings and metadata can still
+        # be produced, although the frontend will not receive signed image URLs.
         return
 
     storage_bucket = get_settings().SUPABASE_STORAGE_BUCKET or ""
@@ -199,6 +228,7 @@ def _extract_and_store_faces(
     image_bytes: bytes,
     drive_file_id: str,
 ) -> int:
+    """Replace face rows, batch-upsert embeddings, and link their vector IDs."""
     faces = extract_faces_and_embeddings(image_bytes)
     logger.info(
         "Detected %s faces for image_id=%s drive_file_id=%s",
@@ -212,6 +242,8 @@ def _extract_and_store_faces(
         image=image,
         faces=faces,
     )
+    # ``replace_image_faces`` flushes new IDs before commit. Those same IDs are
+    # used as Qdrant point IDs, providing the join between both databases.
     point_ids = upsert_face_embeddings(
         faces=[
             {
@@ -237,6 +269,7 @@ def _mark_file_processed(
     attempt_label: str,
     started_at: float,
 ) -> None:
+    """Atomically mark success and advance both parent progress counters."""
     mark_image_done(db, image, face_count=face_count, auto_commit=False)
     increment_job_processed(db, job, auto_commit=False)
     increment_folder_processed(db, folder, auto_commit=False)
@@ -259,6 +292,7 @@ def _handle_processing_failure(
     attempt_label: str,
     exc: Exception,
 ) -> str:
+    """Rollback partial relational work and persist a retryable failure state."""
     db.rollback()
     error_message = str(exc)
     logger.exception(

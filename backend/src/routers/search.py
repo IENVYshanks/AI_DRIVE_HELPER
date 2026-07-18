@@ -1,3 +1,5 @@
+"""HTTP endpoints that start and retrieve persisted face searches."""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -8,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from src.db.database import get_db
+from src.db.config import get_settings
 from src.dependencies import get_current_user
 from src.models.users import User
 from src.services.search_service import get_search_query_for_user, run_face_search
@@ -47,7 +50,21 @@ async def search_faces(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SearchQueryResponse:
-    image_bytes = await image.read()
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Uploaded file must be an image",
+        )
+
+    max_bytes = get_settings().MAX_QUERY_IMAGE_BYTES
+    # Reading one extra byte distinguishes an exactly-at-limit upload from an
+    # oversized one without buffering an unbounded request body in memory.
+    image_bytes = await image.read(max_bytes + 1)
+    if len(image_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Uploaded image is too large",
+        )
     if not image_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -99,6 +116,7 @@ async def get_search_query(
 
 
 def _to_response(search_query) -> SearchQueryResponse:
+    """Convert hydrated database results into ordered API response objects."""
     ordered_results = sorted(search_query.results, key=lambda result: result.rank or 0)
     return SearchQueryResponse(
         id=search_query.id,

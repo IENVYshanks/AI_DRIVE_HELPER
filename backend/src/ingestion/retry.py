@@ -1,3 +1,5 @@
+"""Initial and retry passes for folder ingestion."""
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +22,7 @@ def process_drive_files(
     drive_files: list[dict],
     attempt_label: str,
 ) -> list[FileProcessResult]:
+    """Process files sequentially and collect failures without aborting the pass."""
     failures = []
     for drive_file in drive_files:
         result = process_drive_file(
@@ -41,6 +44,7 @@ def retry_failed_files(
     folder: UserFolder,
     failures: list[FileProcessResult],
 ) -> list[FileProcessResult]:
+    """Run exactly one second attempt for files that failed initially."""
     if not failures:
         return []
 

@@ -1,5 +1,7 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from collections.abc import Generator
+
+from sqlalchemy.orm import Session, sessionmaker
 
 from src.db.config import get_settings
 
@@ -20,9 +22,13 @@ SessionLocal = sessionmaker(
     bind=engine,
 )
 
-def get_db():
+def get_db() -> Generator[Session, None, None]:
+    """Provide one SQLAlchemy session per request and always close it."""
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

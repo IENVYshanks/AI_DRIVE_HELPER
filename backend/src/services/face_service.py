@@ -1,25 +1,38 @@
+"""Detect faces and coordinate their relational representation.
+
+InsightFace produces bounding boxes and 512-value embeddings. This module
+normalizes that output for the ingestion pipeline and maintains matching Face
+rows in Postgres. Vector persistence itself belongs to ``vector_service``.
+"""
+
 from __future__ import annotations
 
 import io
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from insightface.app import FaceAnalysis
 from PIL import Image as PILImage
 from sqlalchemy.orm import Session
 
 from src.models.face import Face
 from src.models.image import Image
 
-_FACE_ANALYZER: FaceAnalysis | None = None
+if TYPE_CHECKING:
+    from insightface.app import FaceAnalysis
+
+# Model initialization is expensive, so one analyzer is shared by the process.
 _FACE_ANALYZER_LOCK = threading.Lock()
+_FACE_ANALYZER: FaceAnalysis | None = None
 
 
 def extract_faces_and_embeddings(image_bytes: bytes) -> list[dict[str, Any]]:
+    """Decode an image and return normalized InsightFace detections.
+
+    Empty output means either no face was found or the model could not analyze
+    the image. Individual detections missing an embedding or box are ignored.
     """
-    Detect faces and compute embeddings using InsightFace.
-    """
+    # Pillow decodes into RGB, while InsightFace/OpenCV expects BGR ordering.
     rgb_array = np.array(PILImage.open(io.BytesIO(image_bytes)).convert("RGB"))
     bgr_array = rgb_array[:, :, ::-1]
 
@@ -55,6 +68,7 @@ def extract_faces_and_embeddings(image_bytes: bytes) -> list[dict[str, Any]]:
 
 
 def extract_primary_face_embedding(image_bytes: bytes) -> dict[str, Any] | None:
+    """Choose the strongest query face, preferring confidence then face area."""
     faces = extract_faces_and_embeddings(image_bytes)
     if not faces:
         return None
@@ -76,8 +90,11 @@ def replace_image_faces(
     image: Image,
     faces: list[dict[str, Any]],
 ) -> list[Face]:
-    """
-    Replace any previously detected faces for this image.
+    """Replace an image's Face rows with the latest detector output.
+
+    This prevents duplicate rows when an image is re-ingested. ``flush``
+    assigns IDs without committing because the caller owns the full file
+    transaction and still needs those IDs for Qdrant points.
     """
     db.query(Face).filter(Face.image_id == image.id).delete(synchronize_session=False)
     db.flush()
@@ -106,6 +123,7 @@ def assign_qdrant_point_ids(
     *,
     face_point_ids: dict[str, str],
 ) -> None:
+    """Store each face's corresponding Qdrant point ID in Postgres."""
     if not face_point_ids:
         return
 
@@ -118,6 +136,7 @@ def assign_qdrant_point_ids(
 
 
 def _to_float(value: Any) -> float | None:
+    """Convert optional model scalars, including NumPy values, to Python floats."""
     if value is None:
         return None
     try:
@@ -127,11 +146,18 @@ def _to_float(value: Any) -> float | None:
 
 
 def _get_face_analyzer() -> FaceAnalysis:
+    """Lazily initialize the process-wide CPU InsightFace model once."""
     global _FACE_ANALYZER
 
     if _FACE_ANALYZER is None:
+        # Double-checked locking avoids serializing every later inference call
+        # while preventing concurrent requests from loading the model twice.
         with _FACE_ANALYZER_LOCK:
             if _FACE_ANALYZER is None:
+                # Importing InsightFace also imports its model stack, so defer it
+                # until the first inference rather than slowing API startup.
+                from insightface.app import FaceAnalysis
+
                 analyzer = FaceAnalysis(
                     name="buffalo_l",
                     providers=["CPUExecutionProvider"],

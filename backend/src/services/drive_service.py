@@ -1,3 +1,10 @@
+"""Google Drive access used by folder registration and image ingestion.
+
+Tokens are stored on the User row after authentication. This service turns
+those tokens into a Drive client, lists direct image children, and downloads
+their bytes for the ingestion pipeline.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -15,9 +22,7 @@ FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 
 
 def get_drive_service(user_id, db: Session):
-    """
-    Build a Google Drive API client from the user's stored access token.
-    """
+    """Build a Drive client from a user's stored OAuth credentials."""
     user = db.query(User).filter(User.id == user_id).first()
     if user is None or not user.drive_access_token:
         logger.warning("No Google Drive token found for user_id=%s", user_id)
@@ -31,9 +36,10 @@ def get_drive_service(user_id, db: Session):
 
 
 def list_images_in_folder(folder_id: str, user_id, db: Session) -> list[dict[str, Any]]:
-    """
-    List images in a Google Drive folder with enough metadata for ingestion.
-    Only image files directly inside the selected folder are included.
+    """List direct image children with metadata required for ingestion.
+
+    Drive paginates large folders. Only requested metadata is returned to keep
+    responses small, and non-image children are deliberately excluded.
     """
     service = get_drive_service(user_id, db)
     files: list[dict[str, Any]] = []
@@ -61,13 +67,14 @@ def list_images_in_folder(folder_id: str, user_id, db: Session) -> list[dict[str
         for item in batch:
             raw_item_count += 1
             mime_type = item.get("mimeType", "")
+            # A bounded sample makes Drive filtering problems diagnosable
+            # without placing an entire large folder in the logs.
             if len(sample_items) < 20:
                 sample_items.append(
                     f"{item.get('name', '<unnamed>')} [{mime_type or 'unknown'}]"
                 )
             if mime_type.startswith("image/"):
                 files.append(item)
-
         page_token = response.get("nextPageToken")
         if not page_token:
             break
@@ -84,6 +91,7 @@ def list_images_in_folder(folder_id: str, user_id, db: Session) -> list[dict[str
 
 
 def get_folder_metadata(folder_id: str, user_id, db: Session) -> dict[str, Any]:
+    """Fetch the identifying metadata for a Drive folder."""
     service = get_drive_service(user_id, db)
     return (
         service.files()
@@ -93,10 +101,12 @@ def get_folder_metadata(folder_id: str, user_id, db: Session) -> dict[str, Any]:
 
 
 def download_file_bytes(file_id: str, user_id, db: Session) -> bytes:
+    """Download a Drive file and return its raw bytes."""
     service = get_drive_service(user_id, db)
     logger.debug("Downloading Drive file_id=%s for user_id=%s", file_id, user_id)
     return service.files().get_media(fileId=file_id).execute()
 
 
 def is_drive_access_error(exc: Exception) -> bool:
+    """Identify Drive/auth failures that callers may present as user errors."""
     return isinstance(exc, (HttpError, ValueError))

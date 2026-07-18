@@ -1,3 +1,5 @@
+"""HTTP endpoints for folder registration, ingestion progress, and libraries."""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -7,6 +9,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
+from src.db.config import get_settings
 from src.db.database import SessionLocal, get_db
 from src.dependencies import get_current_user
 from src.models.image import Image
@@ -21,6 +24,7 @@ from src.services.ingestion_service import (
     run_ingestion_job,
     start_ingestion_job,
 )
+from src.services.job_service import mark_job_failed
 from src.services.storage_service import get_signed_url, storage_is_configured
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
@@ -129,7 +133,24 @@ async def start_folder_ingestion(
         folder_id=folder.id,
         job_type=payload.job_type,
     )
-    background_tasks.add_task(_run_ingestion_job_in_new_session, job.id)
+    if get_settings().TASK_QUEUE_MODE == "celery":
+        try:
+            from src.tasks import run_folder_ingestion_task
+
+            run_folder_ingestion_task.delay(str(job.id))
+        except Exception as exc:
+            await run_in_threadpool(
+                mark_job_failed,
+                db,
+                job,
+                "Could not enqueue ingestion job",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Ingestion queue is unavailable",
+            ) from exc
+    else:
+        background_tasks.add_task(_run_ingestion_job_in_new_session, job.id)
     return job
 
 
@@ -187,6 +208,7 @@ async def get_all_ingested_images(
 
 
 def _to_ingested_image_response(image: Image) -> IngestedImageResponse:
+    """Add a temporary storage URL to an Image model for API delivery."""
     image_url = None
     if storage_is_configured() and image.storage_key:
         image_url = get_signed_url(image.storage_key)
@@ -206,6 +228,11 @@ def _to_ingested_image_response(image: Image) -> IngestedImageResponse:
 
 
 def _run_ingestion_job_in_new_session(job_id: UUID) -> None:
+    """Give a background job a session independent of the finished request.
+
+    Request-scoped sessions close after the response, so passing the router's
+    session into background work would eventually use a closed connection.
+    """
     db = SessionLocal()
     try:
         run_ingestion_job(db, job_id=job_id)

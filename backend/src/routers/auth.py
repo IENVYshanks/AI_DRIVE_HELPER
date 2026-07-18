@@ -1,10 +1,12 @@
 import jwt
 import requests
+from uuid import UUID
 from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from src.db.config import get_settings
 from src.db.database import get_db
 from src.models.users import User
 
@@ -15,6 +17,12 @@ from src.services.auth_service import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def require_insecure_email_auth() -> None:
+    """Allow passwordless email endpoints only in explicitly enabled environments."""
+    if not get_settings().ALLOW_INSECURE_EMAIL_AUTH:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
 class RegisterRequest(BaseModel):
@@ -79,7 +87,11 @@ def fetch_google_userinfo(access_token: str) -> dict:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
+async def register(
+    payload: RegisterRequest,
+    _: None = Depends(require_insecure_email_auth),
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     existing_user = await run_in_threadpool(
         lambda: db.query(User).filter(User.email == payload.email).first()
     )
@@ -101,7 +113,11 @@ async def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> T
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+async def login(
+    payload: LoginRequest,
+    _: None = Depends(require_insecure_email_auth),
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     user = await run_in_threadpool(
         lambda: db.query(User).filter(User.email == payload.email).first()
     )
@@ -149,7 +165,7 @@ async def create_google_session(
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)
-def refresh(payload: RefreshRequest) -> AccessTokenResponse:
+def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> AccessTokenResponse:
     try:
         token_payload = decode_jwt(payload.refresh_token)
     except jwt.InvalidTokenError as exc:
@@ -170,5 +186,19 @@ def refresh(payload: RefreshRequest) -> AccessTokenResponse:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token subject missing",
         )
-    
+    try:
+        user_id = UUID(subject)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject",
+        ) from exc
+
+    user = db.query(User).filter(User.id == user_id, User.status == "active").first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not available",
+        )
+
     return AccessTokenResponse(access_token=create_access_token(subject))

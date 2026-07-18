@@ -1,3 +1,10 @@
+"""Qdrant persistence and similarity search for face embeddings.
+
+Postgres owns face metadata; Qdrant owns the vectors used for fast nearest-
+neighbor search. Their shared face ID links results back to relational data.
+Every search is filtered by user ID to prevent cross-user matches.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +26,7 @@ _PAYLOAD_INDEXES: tuple[str, ...] = (
 
 
 def get_qdrant_client() -> QdrantClient:
+    """Lazily create and reuse the process-wide Qdrant client."""
     global _QDRANT_CLIENT
 
     if _QDRANT_CLIENT is None:
@@ -33,6 +41,11 @@ def get_qdrant_client() -> QdrantClient:
 
 
 def ensure_face_collection(vector_size: int) -> None:
+    """Create the face collection or verify its vector dimensions.
+
+    Embedding models have a fixed output size. Refusing a mismatch avoids
+    silently writing vectors from an incompatible model into existing data.
+    """
     settings = get_settings()
     client = get_qdrant_client()
     collections = client.get_collections().collections
@@ -73,6 +86,7 @@ def upsert_face_embedding(
     embedding: Iterable[float],
     cluster_id=None,
 ) -> str:
+    """Upsert one face vector using the face ID as the Qdrant point ID."""
     embedding_list = list(embedding)
     if not embedding_list:
         raise ValueError("Embedding vector is empty")
@@ -102,6 +116,7 @@ def upsert_face_embedding(
 
 
 def upsert_face_embeddings(*, faces: list[dict]) -> dict[str, str]:
+    """Batch-upsert detected faces and return Postgres-to-Qdrant ID mappings."""
     if not faces:
         return {}
 
@@ -148,6 +163,7 @@ def upsert_face_embeddings(*, faces: list[dict]) -> dict[str, str]:
 
 
 def search_similar_faces(*, user_id, embedding: Iterable[float], limit: int = 10):
+    """Return the closest face vectors belonging to one user."""
     embedding_list = list(embedding)
     if not embedding_list:
         raise ValueError("Embedding vector is empty")
@@ -165,6 +181,7 @@ def search_similar_faces(*, user_id, embedding: Iterable[float], limit: int = 10
     response = client.query_points(
         collection_name=settings.QDRANT_COLLECTION_NAME,
         query=embedding_list,
+        # User scoping is enforced inside Qdrant, before result limiting.
         query_filter=models.Filter(
             must=[
                 models.FieldCondition(
@@ -180,6 +197,7 @@ def search_similar_faces(*, user_id, embedding: Iterable[float], limit: int = 10
 
 
 def _ensure_payload_indexes() -> None:
+    """Ensure filterable identifiers are indexed for efficient searches."""
     settings = get_settings()
     client = get_qdrant_client()
     for field_name in _PAYLOAD_INDEXES:

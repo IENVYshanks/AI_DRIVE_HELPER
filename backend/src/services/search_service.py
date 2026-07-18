@@ -1,3 +1,10 @@
+"""Orchestrate face search across InsightFace, Qdrant, and Postgres.
+
+The search router passes uploaded image bytes here. This module extracts the
+query face, asks Qdrant for similar embeddings, then persists a relational
+search history that the API can hydrate with image metadata and signed URLs.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +30,7 @@ def create_search_query(
     user_id,
     query_image_storage_key: str | None = None,
 ) -> SearchQuery:
+    """Create the Postgres record that tracks one search request."""
     query = SearchQuery(
         user_id=user_id,
         query_image_storage_key=query_image_storage_key,
@@ -41,6 +49,11 @@ def run_face_search(
     query_image_storage_key: str | None = None,
     limit: int = 10,
 ) -> SearchQuery:
+    """Run the complete face-search workflow and return its tracking record.
+
+    The query row is created before face detection so unsuccessful searches
+    are still visible in history and can report latency and detection status.
+    """
     search_query = create_search_query(
         db,
         user_id=user_id,
@@ -52,6 +65,8 @@ def run_face_search(
     primary_face = extract_primary_face_embedding(image_bytes)
 
     if primary_face is None:
+        # No vector search is possible without a face embedding. Persist this
+        # as a valid zero-result search rather than treating it as an error.
         logger.info("No face detected for search query_id=%s", search_query.id)
         search_query.face_detected = False
         search_query.results_count = 0
@@ -63,6 +78,8 @@ def run_face_search(
         return search_query
 
     search_query.face_detected = True
+    # Qdrant performs the numerical similarity search; Postgres remains the
+    # source of truth for users, images, faces, and durable search history.
     qdrant_results = search_similar_faces(
         user_id=user_id,
         embedding=primary_face["embedding"],
@@ -90,6 +107,7 @@ def run_face_search(
 
 
 def get_search_query_for_user(db: Session, *, query_id, user_id) -> SearchQuery | None:
+    """Load a user-owned query and eagerly fetch everything needed by the API."""
     return (
         db.query(SearchQuery)
         .options(
@@ -102,6 +120,12 @@ def get_search_query_for_user(db: Session, *, query_id, user_id) -> SearchQuery 
 
 
 def persist_search_results(db: Session, *, query: SearchQuery, qdrant_results) -> list[SearchResult]:
+    """Replace a query's relational results with valid Qdrant matches.
+
+    Qdrant payloads contain face IDs. They are resolved back to Postgres rows
+    so stale or malformed vector points never become broken API results.
+    """
+    # Replacement makes this function safe to rerun for the same query.
     db.query(SearchResult).filter(SearchResult.query_id == query.id).delete(
         synchronize_session=False
     )
@@ -126,6 +150,7 @@ def persist_search_results(db: Session, *, query: SearchQuery, qdrant_results) -
         logger.info("No Qdrant hits persisted for search query_id=%s", query.id)
         return []
 
+    # Fetch all referenced faces in one query rather than once per Qdrant hit.
     faces = (
         db.query(Face)
         .options(joinedload(Face.image))
@@ -147,6 +172,7 @@ def persist_search_results(db: Session, *, query: SearchQuery, qdrant_results) -
             continue
 
         face = face_map.get(face_id)
+        # A vector may outlive its relational row after partial cleanup.
         if face is None or face.image is None:
             continue
 
@@ -173,4 +199,5 @@ def persist_search_results(db: Session, *, query: SearchQuery, qdrant_results) -
 
 
 def _elapsed_ms(started: float) -> int:
+    """Convert a monotonic performance-counter interval to milliseconds."""
     return int((perf_counter() - started) * 1000)

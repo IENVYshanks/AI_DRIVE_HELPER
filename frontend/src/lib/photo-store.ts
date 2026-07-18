@@ -1,4 +1,6 @@
-// Mock client-side photo store. Replace with real API later.
+import { PHOTO_STORAGE_KEY } from "@/lib/storage-keys";
+
+/** A lightweight local photo used by the browser-only upload flow. */
 export type StoredPhoto = {
   id: string;
   name: string;
@@ -6,28 +8,26 @@ export type StoredPhoto = {
   uploadedAt: number;
 };
 
-const KEY = "photovault.photos";
-
 export function getPhotos(): StoredPhoto[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(KEY) || "[]");
+    return JSON.parse(localStorage.getItem(PHOTO_STORAGE_KEY) || "[]") as StoredPhoto[];
   } catch {
     return [];
   }
 }
 
-export function savePhotos(photos: StoredPhoto[]) {
+export function savePhotos(photos: StoredPhoto[]): void {
   // Keep storage small — cap at 24 most recent to avoid quota errors.
   const capped = photos.slice(-24);
   try {
-    localStorage.setItem(KEY, JSON.stringify(capped));
+    localStorage.setItem(PHOTO_STORAGE_KEY, JSON.stringify(capped));
   } catch {
-    // ignore quota issues in mock
+    // A full localStorage quota should not break the upload flow.
   }
 }
 
-export function addPhotos(newOnes: StoredPhoto[]) {
+export function addPhotos(newOnes: StoredPhoto[]): void {
   const existing = getPhotos();
   savePhotos([...existing, ...newOnes]);
 }

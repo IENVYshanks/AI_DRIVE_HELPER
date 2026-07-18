@@ -1,5 +1,16 @@
 # AI Image Classifier
 
+> Preparing to explain this project in an interview? Read the
+> [Interview Explanation Guide](./docs/INTERVIEW_GUIDE.md) for a component-by-component
+> walkthrough, complete request flows, design tradeoffs, and common questions.
+
+For deployment safeguards, migrations, worker setup, and the operational
+checklist, see the [Production Deployment Guide](./docs/PRODUCTION.md).
+
+For a field-by-field explanation of authentication, Google Drive ingestion,
+face embeddings, vector search, and persistence, read the
+[Application Data Flow](./docs/DATA_FLOW.md).
+
 AI Image Classifier is a full-stack face search application that:
 
 - authenticates users with Google in Streamlit
@@ -48,8 +59,11 @@ AI Image Classifier is a full-stack face search application that:
 |   |   `-- secrets.toml
 |   `-- src/
 |       |-- config_env.py
+|       |-- app.py
 |       |-- db/
 |       |-- dependencies.py
+|       |-- ingestion/
+|       |-- logging_config.py
 |       |-- models/
 |       |-- routers/
 |       `-- services/
@@ -63,6 +77,7 @@ Important modules:
 
 - [backend/frontend.py](./backend/frontend.py): Streamlit UI
 - [backend/main.py](./backend/main.py): FastAPI app entrypoint
+- [backend/src/app.py](./backend/src/app.py): FastAPI app assembly and route registration
 - [backend/schema.sql](./backend/schema.sql): relational schema reference
 - [backend/src/routers/ingestion.py](./backend/src/routers/ingestion.py): ingestion APIs
 - [backend/src/routers/search.py](./backend/src/routers/search.py): face search APIs
@@ -73,6 +88,33 @@ Important modules:
 - [frontend/src](./frontend/src): React frontend source
 
 ## Architecture
+
+### How a request moves through the project
+
+The backend is organized in layers so each file has one main responsibility:
+
+1. `routers/` validates HTTP input, authenticates the caller, and shapes the response.
+2. `services/` contains reusable business operations and integrations with Drive,
+   Supabase, Qdrant, InsightFace, and Postgres.
+3. `ingestion/job_runner.py` coordinates a whole folder; `file_processor.py` coordinates
+   one image; `state.py` maps Drive metadata and failures into database rows.
+4. `models/` defines the Postgres records shared by those layers.
+5. The React frontend calls the routers through `frontend/src/lib/api.ts`; it does not
+   communicate with databases or storage providers directly.
+
+The ingestion data flow is:
+
+```text
+React -> FastAPI router -> ingestion job -> Google Drive download
+                                      |-> Supabase image object
+                                      |-> InsightFace detection
+                                      |-> Postgres image/face/job state
+                                      `-> Qdrant face embedding
+```
+
+The search flow reverses that relationship: InsightFace embeds the uploaded query,
+Qdrant finds similar face IDs, Postgres resolves those IDs to image metadata, and
+Supabase provides temporary signed URLs for the response.
 
 ### Postgres
 
@@ -245,6 +287,25 @@ React frontend:
 
 - Vite app: `http://localhost:5173`
 
+## Development Checks
+
+Run the backend syntax and state-transition checks from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m compileall -q backend
+Set-Location backend
+..\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Run the complete frontend check from `frontend/`:
+
+```powershell
+npm run check
+```
+
+This performs TypeScript checking, ESLint validation, and a production build. Formatting is
+kept separate: use `npm run format:check` to inspect it or `npm run format` to apply it.
+
 ### 3. Start Streamlit
 
 For the legacy Streamlit UI, use another terminal:
@@ -287,7 +348,7 @@ Streamlit UI:
 
 ## Logging
 
-Logs are written to the configured log file path instead of the terminal.
+Logs are written to the configured rotating log file and, by default, the terminal.
 
 Default:
 
@@ -312,4 +373,4 @@ LOG_LEVEL=INFO
 
 ## License
 
-Add a license before publishing publicly.
+This project is distributed under the terms in [LICENSE](./LICENSE).

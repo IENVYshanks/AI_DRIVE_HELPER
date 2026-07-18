@@ -1,3 +1,5 @@
+"""Reusable FastAPI dependencies, primarily authenticated-user resolution."""
+
 from uuid import UUID
 
 import jwt
@@ -16,6 +18,11 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """Validate a bearer access token and load its active Postgres user.
+
+    Returning the User here lets protected routes share authentication and
+    user scoping without duplicating token parsing or database lookups.
+    """
     token = credentials.credentials
 
     try:
@@ -26,6 +33,7 @@ def get_current_user(
             detail="Invalid authentication token",
         ) from exc
 
+    # Refresh tokens are valid JWTs but must never authorize API operations.
     if payload.get("type") != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -48,10 +56,10 @@ def get_current_user(
         ) from exc
 
     user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
+    if user is None or user.status != "active":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+            detail="User not available",
         )
 
     return user
