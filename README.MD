@@ -1,16 +1,5 @@
 # AI Image Classifier
 
-> Preparing to explain this project in an interview? Read the
-> [Interview Explanation Guide](./docs/INTERVIEW_GUIDE.md) for a component-by-component
-> walkthrough, complete request flows, design tradeoffs, and common questions.
-
-For deployment safeguards, migrations, worker setup, and the operational
-checklist, see the [Production Deployment Guide](./docs/PRODUCTION.md).
-
-For a field-by-field explanation of authentication, Google Drive ingestion,
-face embeddings, vector search, and persistence, read the
-[Application Data Flow](./docs/DATA_FLOW.md).
-
 AI Image Classifier is a full-stack face search application that:
 
 - authenticates users with Google in Streamlit
