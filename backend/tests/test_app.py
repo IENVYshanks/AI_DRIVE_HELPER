@@ -42,3 +42,21 @@ class ApplicationTests(TestCase):
             response = client.get("/docs")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_passwordless_email_auth_routes_are_not_registered(self) -> None:
+        settings = get_settings().model_copy(
+            update={
+                "ENVIRONMENT": "test",
+                "AUTO_CREATE_TABLES": False,
+                "TRUSTED_HOSTS": "localhost,testserver",
+            }
+        )
+        with TestClient(create_app(settings)) as client:
+            login_response = client.post("/auth/login", json={"email": "user@example.com"})
+            register_response = client.post(
+                "/auth/register",
+                json={"email": "user@example.com", "name": "User"},
+            )
+
+        self.assertEqual(login_response.status_code, 404)
+        self.assertEqual(register_response.status_code, 404)

@@ -9,6 +9,15 @@ export type BackendTokenResponse = {
   token_type: string;
 };
 
+export type GoogleSessionResponse = BackendTokenResponse & {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+    avatar_url: string | null;
+  };
+};
+
 export type FolderResponse = {
   id: string;
   drive_folder_id: string;
@@ -127,24 +136,14 @@ export function getStoredBackendToken(): string | null {
   }
 }
 
-export function registerUser(email: string, name: string): Promise<BackendTokenResponse> {
-  return apiRequest<BackendTokenResponse>("/auth/register", {
+export function createGoogleSession(
+  code: string,
+  redirectUri: string,
+): Promise<GoogleSessionResponse> {
+  return apiRequest<GoogleSessionResponse>("/auth/google/session", {
     method: "POST",
-    body: { email, name },
-  });
-}
-
-export function loginUser(email: string): Promise<BackendTokenResponse> {
-  return apiRequest<BackendTokenResponse>("/auth/login", {
-    method: "POST",
-    body: { email },
-  });
-}
-
-export function createGoogleSession(googleAccessToken: string): Promise<BackendTokenResponse> {
-  return apiRequest<BackendTokenResponse>("/auth/google/session", {
-    method: "POST",
-    body: { drive_access_token: googleAccessToken },
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+    body: { code, redirect_uri: redirectUri },
   });
 }
 

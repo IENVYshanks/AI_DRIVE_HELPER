@@ -8,13 +8,16 @@ their bytes for the ingestion pipeline.
 from __future__ import annotations
 
 import logging
+from datetime import timezone
 from typing import Any
 
+from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
 
+from src.db.config import get_settings
 from src.models.users import User
 
 logger = logging.getLogger(__name__)
@@ -28,10 +31,30 @@ def get_drive_service(user_id, db: Session):
         logger.warning("No Google Drive token found for user_id=%s", user_id)
         raise ValueError("No Google Drive access token found for user")
 
+    settings = get_settings()
+    expiry = user.token_expires_at
+    if expiry is not None and expiry.tzinfo is not None:
+        expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
+
     credentials = Credentials(
         token=user.drive_access_token,
         refresh_token=user.drive_refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=settings.GOOGLE_CLIENT_ID,
+        client_secret=settings.GOOGLE_CLIENT_SECRET,
+        expiry=expiry,
     )
+    if credentials.expired:
+        if not credentials.refresh_token or not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+            raise ValueError("Google Drive authorization has expired; sign in again")
+        credentials.refresh(GoogleAuthRequest())
+        user.drive_access_token = credentials.token
+        if credentials.expiry is not None:
+            refreshed_expiry = credentials.expiry
+            if refreshed_expiry.tzinfo is None:
+                refreshed_expiry = refreshed_expiry.replace(tzinfo=timezone.utc)
+            user.token_expires_at = refreshed_expiry
+        db.commit()
     return build("drive", "v3", credentials=credentials)
 
 

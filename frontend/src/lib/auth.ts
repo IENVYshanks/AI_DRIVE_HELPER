@@ -1,9 +1,4 @@
-import {
-  createGoogleSession,
-  loginUser,
-  registerUser,
-  type BackendTokenResponse,
-} from "@/lib/api";
+import { createGoogleSession } from "@/lib/api";
 import { AUTH_STORAGE_KEY } from "@/lib/storage-keys";
 
 export type User = {
@@ -13,24 +8,16 @@ export type User = {
   avatarUrl?: string;
   backendAccessToken?: string;
   backendRefreshToken?: string;
-  googleAccessToken?: string;
 };
 
-type GoogleTokenResponse = {
-  access_token?: string;
+type GoogleCodeResponse = {
+  code?: string;
   error?: string;
   error_description?: string;
 };
 
-type GoogleUserInfo = {
-  sub: string;
-  email: string;
-  name?: string;
-  picture?: string;
-};
-
-type GoogleTokenClient = {
-  requestAccessToken: (options?: { prompt?: string }) => void;
+type GoogleCodeClient = {
+  requestCode: () => void;
 };
 
 declare global {
@@ -38,12 +25,15 @@ declare global {
     google?: {
       accounts?: {
         oauth2?: {
-          initTokenClient: (config: {
+          initCodeClient: (config: {
             client_id: string;
             scope: string;
-            callback: (response: GoogleTokenResponse) => void;
+            ux_mode: "popup";
+            redirect_uri: string;
+            include_granted_scopes: boolean;
+            callback: (response: GoogleCodeResponse) => void;
             error_callback?: (error: unknown) => void;
-          }) => GoogleTokenClient;
+          }) => GoogleCodeClient;
         };
       };
     };
@@ -76,18 +66,6 @@ function saveUser(user: User): User {
   return user;
 }
 
-async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
-  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  if (!response.ok) {
-    throw new Error("Could not read Google profile");
-  }
-
-  return response.json() as Promise<GoogleUserInfo>;
-}
-
 function loadGoogleIdentityServices(): Promise<void> {
   if (window.google?.accounts?.oauth2) return Promise.resolve();
 
@@ -95,9 +73,13 @@ function loadGoogleIdentityServices(): Promise<void> {
     const existingScript = document.getElementById(GOOGLE_SCRIPT_ID) as HTMLScriptElement | null;
     if (existingScript) {
       existingScript.addEventListener("load", () => resolve(), { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("Google sign-in failed to load")), {
-        once: true,
-      });
+      existingScript.addEventListener(
+        "error",
+        () => reject(new Error("Google sign-in failed to load")),
+        {
+          once: true,
+        },
+      );
       return;
     }
 
@@ -112,71 +94,56 @@ function loadGoogleIdentityServices(): Promise<void> {
   });
 }
 
-async function requestGoogleAccessToken(): Promise<string> {
+async function requestGoogleAuthorizationCode(): Promise<{
+  code: string;
+  redirectUri: string;
+}> {
   if (!GOOGLE_CLIENT_ID) {
     throw new Error("Set VITE_GOOGLE_CLIENT_ID in frontend/.env.local");
   }
 
   await loadGoogleIdentityServices();
+  const redirectUri = window.location.origin;
 
   return new Promise((resolve, reject) => {
-    const tokenClient = window.google?.accounts?.oauth2?.initTokenClient({
+    const codeClient = window.google?.accounts?.oauth2?.initCodeClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: GOOGLE_SCOPES,
+      ux_mode: "popup",
+      redirect_uri: redirectUri,
+      include_granted_scopes: true,
       callback: (response) => {
-        if (response.error || !response.access_token) {
-          reject(new Error(response.error_description || response.error || "Google sign-in was cancelled"));
+        if (response.error || !response.code) {
+          reject(
+            new Error(
+              response.error_description || response.error || "Google sign-in was cancelled",
+            ),
+          );
           return;
         }
-        resolve(response.access_token);
+        resolve({ code: response.code, redirectUri });
       },
       error_callback: (error) => reject(error),
     });
 
-    if (!tokenClient) {
+    if (!codeClient) {
       reject(new Error("Google sign-in is unavailable"));
       return;
     }
 
-    tokenClient.requestAccessToken({ prompt: "consent" });
-  });
-}
-
-export async function signIn(email: string, _password: string): Promise<User> {
-  const tokenPayload = await loginUser(email);
-  return saveUser({
-    id: email,
-    email,
-    name: email.split("@")[0].replace(/[._]/g, " "),
-    backendAccessToken: tokenPayload.access_token,
-    backendRefreshToken: tokenPayload.refresh_token,
-  });
-}
-
-export async function signUp(name: string, email: string, _password: string): Promise<User> {
-  const tokenPayload = await registerUser(email, name);
-  return saveUser({
-    id: email,
-    email,
-    name,
-    backendAccessToken: tokenPayload.access_token,
-    backendRefreshToken: tokenPayload.refresh_token,
+    codeClient.requestCode();
   });
 }
 
 export async function signInWithGoogle(): Promise<User> {
-  const googleAccessToken = await requestGoogleAccessToken();
-  const [googleUser, tokenPayload] = await Promise.all([
-    fetchGoogleUserInfo(googleAccessToken),
-    createGoogleSession(googleAccessToken),
-  ]);
+  const { code, redirectUri } = await requestGoogleAuthorizationCode();
+  const tokenPayload = await createGoogleSession(code, redirectUri);
 
   return saveUser({
-    id: googleUser.sub,
-    email: googleUser.email,
-    name: googleUser.name || googleUser.email.split("@")[0],
-    avatarUrl: googleUser.picture,
-    googleAccessToken,
+    id: tokenPayload.user.id,
+    email: tokenPayload.user.email,
+    name: tokenPayload.user.name || tokenPayload.user.email.split("@")[0],
+    avatarUrl: tokenPayload.user.avatar_url || undefined,
     backendAccessToken: tokenPayload.access_token,
     backendRefreshToken: tokenPayload.refresh_token,
   });

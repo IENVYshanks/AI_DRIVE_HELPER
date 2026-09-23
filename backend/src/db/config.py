@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     AUTO_CREATE_TABLES: bool = True
     SKIP_ALREADY_INGESTED: bool = True
-    ALLOW_INSECURE_EMAIL_AUTH: bool = True
     ENABLE_API_DOCS: bool = True
     FORCE_HTTPS: bool = False
     TRUSTED_HOSTS: str = "localhost,127.0.0.1"
@@ -37,10 +36,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: str = "logs/app.log"
     LOG_TO_CONSOLE: bool = True
-    BACKEND_CORS_ORIGINS: str = (
-        "http://localhost:5173,http://127.0.0.1:5173,"
-        "http://localhost:8501,http://127.0.0.1:8501"
-    )
+    BACKEND_CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
     REQUEST_ID_HEADER: str = "X-Request-ID"
     MAX_QUERY_IMAGE_BYTES: int = 10 * 1024 * 1024
     MAX_INGESTION_IMAGE_BYTES: int = 25 * 1024 * 1024
@@ -51,6 +47,10 @@ class Settings(BaseSettings):
     SUPABASE_URL: str | None = None
     SUPABASE_SERVICE_ROLE_KEY: str | None = None
     SUPABASE_STORAGE_BUCKET: str | None = None
+
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str | None = None
 
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None
@@ -71,8 +71,6 @@ class Settings(BaseSettings):
         errors: list[str] = []
         if self.AUTO_CREATE_TABLES:
             errors.append("AUTO_CREATE_TABLES must be false")
-        if self.ALLOW_INSECURE_EMAIL_AUTH:
-            errors.append("ALLOW_INSECURE_EMAIL_AUTH must be false")
         if "*" in self.cors_origins:
             errors.append("BACKEND_CORS_ORIGINS cannot contain '*' when credentials are enabled")
         if not self.cors_origins:
@@ -89,6 +87,14 @@ class Settings(BaseSettings):
         )
         if not all(storage_values):
             errors.append("all Supabase storage settings are required")
+
+        google_oauth_values = (
+            self.GOOGLE_CLIENT_ID,
+            self.GOOGLE_CLIENT_SECRET,
+            self.GOOGLE_REDIRECT_URI,
+        )
+        if not all(google_oauth_values):
+            errors.append("all Google OAuth settings are required")
 
         if errors:
             raise ValueError("Invalid production configuration: " + "; ".join(errors))

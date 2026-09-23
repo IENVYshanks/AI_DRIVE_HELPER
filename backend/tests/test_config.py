@@ -21,19 +21,16 @@ class ProductionSettingsTests(TestCase):
                 **BASE_SETTINGS,
                 ENVIRONMENT="production",
                 AUTO_CREATE_TABLES=True,
-                ALLOW_INSECURE_EMAIL_AUTH=True,
             )
 
         message = str(context.exception)
         self.assertIn("AUTO_CREATE_TABLES must be false", message)
-        self.assertIn("ALLOW_INSECURE_EMAIL_AUTH must be false", message)
 
     def test_valid_production_configuration_is_accepted(self) -> None:
         settings = Settings(
             **BASE_SETTINGS,
             ENVIRONMENT="production",
             AUTO_CREATE_TABLES=False,
-            ALLOW_INSECURE_EMAIL_AUTH=False,
             ENABLE_API_DOCS=False,
             TRUSTED_HOSTS="api.example.com",
             BACKEND_CORS_ORIGINS="https://app.example.com",
@@ -42,6 +39,9 @@ class ProductionSettingsTests(TestCase):
             SUPABASE_STORAGE_BUCKET="images",
             TASK_QUEUE_MODE="celery",
             CELERY_BROKER_URL="redis://redis:6379/0",
+            GOOGLE_CLIENT_ID="google-client-id",
+            GOOGLE_CLIENT_SECRET="google-client-secret",
+            GOOGLE_REDIRECT_URI="https://app.example.com",
         )
 
         self.assertTrue(settings.is_production)

@@ -3,10 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowRight, Aperture } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { signIn, signUp, signInWithGoogle } from "@/lib/auth";
+import { signInWithGoogle } from "@/lib/auth";
 import { useAuth } from "@/hooks/use-auth";
 import heroImage from "@/assets/hero-photos.jpg";
 
@@ -36,51 +33,7 @@ function LandingPage() {
     if (user) navigate({ to: "/dashboard" });
   }, [user, navigate]);
 
-  // signin state
-  const [siEmail, setSiEmail] = useState("");
-  const [siPassword, setSiPassword] = useState("");
-
-  // signup state
-  const [suName, setSuName] = useState("");
-  const [suEmail, setSuEmail] = useState("");
-  const [suPassword, setSuPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!siEmail || !siPassword) {
-      toast.error("Enter email and password");
-      return;
-    }
-    setAuthLoading(true);
-    try {
-      await signIn(siEmail, siPassword);
-      toast.success("Welcome back");
-      navigate({ to: "/dashboard" });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Sign in failed");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!suName || !suEmail || suPassword.length < 6) {
-      toast.error("Fill all fields — password ≥ 6 chars");
-      return;
-    }
-    setAuthLoading(true);
-    try {
-      await signUp(suName, suEmail, suPassword);
-      toast.success("Account created");
-      navigate({ to: "/dashboard" });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Account creation failed");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
 
   const handleGoogle = async () => {
     setAuthLoading(true);
@@ -133,54 +86,12 @@ function LandingPage() {
         {/* Right — auth */}
         <div className="order-1 lg:order-2">
           <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-6 shadow-editorial backdrop-blur-sm sm:p-8">
-            <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">Sign in</TabsTrigger>
-                <TabsTrigger value="signup">Create account</TabsTrigger>
-              </TabsList>
+            <h2 className="font-serif text-3xl text-foreground">Welcome to Atelier</h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Sign in securely with the Google account that can access your Drive photos.
+            </p>
 
-              <TabsContent value="signin" className="mt-6">
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="si-email">Email</Label>
-                    <Input id="si-email" type="email" autoComplete="email"
-                      value={siEmail} onChange={(e) => setSiEmail(e.target.value)} placeholder="you@studio.com" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="si-password">Password</Label>
-                    <Input id="si-password" type="password" autoComplete="current-password"
-                      value={siPassword} onChange={(e) => setSiPassword(e.target.value)} placeholder="••••••••" />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={authLoading}>Sign in</Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="signup" className="mt-6">
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="su-name">Name</Label>
-                    <Input id="su-name" value={suName} onChange={(e) => setSuName(e.target.value)} placeholder="Ada Lovelace" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="su-email">Email</Label>
-                    <Input id="su-email" type="email" value={suEmail} onChange={(e) => setSuEmail(e.target.value)} placeholder="you@studio.com" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="su-password">Password</Label>
-                    <Input id="su-password" type="password" value={suPassword} onChange={(e) => setSuPassword(e.target.value)} placeholder="At least 6 characters" />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={authLoading}>Create account</Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-
-            <div className="relative my-6 flex items-center">
-              <div className="flex-1 border-t border-border" />
-              <span className="px-3 text-xs uppercase tracking-widest text-muted-foreground">or</span>
-              <div className="flex-1 border-t border-border" />
-            </div>
-
-            <Button variant="outline" className="w-full" onClick={handleGoogle} disabled={authLoading}>
+            <Button variant="outline" className="mt-6 w-full" onClick={handleGoogle} disabled={authLoading}>
               <GoogleIcon />
               <span className="ml-2">Continue with Google</span>
             </Button>

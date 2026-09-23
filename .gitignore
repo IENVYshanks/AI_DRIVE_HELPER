@@ -5,7 +5,6 @@
 **/.env.*
 !.env.example
 !**/.env.example
-**/.streamlit/secrets.toml
 .dev.vars
 **/.dev.vars
 credentials*.json
@@ -16,7 +15,7 @@ service-account*.json
 *.p12
 *.pfx
 docs/
-
+security-audit-2026-09-23.md
 # Python environments, bytecode, and tooling caches
 .venv/
 venv/

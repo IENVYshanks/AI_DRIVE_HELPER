@@ -2,7 +2,7 @@
 
 AI Image Classifier is a full-stack face search application that:
 
-- authenticates users with Google in Streamlit
+- authenticates users with Google in the React frontend
 - browses Google Drive folders
 - ingests image files into a backend pipeline
 - extracts face embeddings with InsightFace
@@ -15,7 +15,6 @@ AI Image Classifier is a full-stack face search application that:
 
 - Frontend: React / Vite in `frontend/`
 - Backend: FastAPI in `backend/`
-- Legacy companion UI: Streamlit in `backend/frontend.py`
 - Database: Postgres
 - Object storage: Supabase Storage
 - Vector database: Qdrant
@@ -39,13 +38,10 @@ AI Image Classifier is a full-stack face search application that:
 ```text
 .
 |-- backend/
-|   |-- frontend.py
 |   |-- main.py
 |   |-- requirements.txt
 |   |-- schema.sql
 |   |-- .env.example
-|   |-- .streamlit/
-|   |   `-- secrets.toml
 |   `-- src/
 |       |-- config_env.py
 |       |-- app.py
@@ -64,7 +60,6 @@ AI Image Classifier is a full-stack face search application that:
 
 Important modules:
 
-- [backend/frontend.py](./backend/frontend.py): Streamlit UI
 - [backend/main.py](./backend/main.py): FastAPI app entrypoint
 - [backend/src/app.py](./backend/src/app.py): FastAPI app assembly and route registration
 - [backend/schema.sql](./backend/schema.sql): relational schema reference
@@ -177,14 +172,15 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 
 ```env
 BACKEND_URL=http://127.0.0.1:8000
-BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:8501,http://127.0.0.1:8501
+BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
 ### Google
 
 ```env
 GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_API_KEY=your_google_api_key
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:5173
 ```
 
 For the React frontend, also set:
@@ -201,30 +197,10 @@ http://localhost:5173
 http://127.0.0.1:5173
 ```
 
-## Streamlit Secrets
-
-The Streamlit login flow is configured in `backend/.streamlit/secrets.toml`.
-
-Important notes:
-
-- use `drive.readonly` if you want to browse Drive folders and files
-- restart Streamlit and sign in again after changing OAuth scopes
-- do not commit `backend/.streamlit/secrets.toml`
-
-Example shape:
-
-```toml
-[auth]
-redirect_uri = "http://localhost:8501/oauth2callback"
-cookie_secret = "your-cookie-secret"
-expose_tokens = ["access"]
-
-[auth.google]
-client_id = "your-google-client-id"
-client_secret = "your-google-client-secret"
-server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
-client_kwargs = { scope = "openid profile email https://www.googleapis.com/auth/drive.readonly", access_type = "offline", prompt = "consent" }
-```
+Use the same Google OAuth client ID in the backend and React configuration. Keep the
+client secret backend-only. Configure `GOOGLE_REDIRECT_URI` as an authorized JavaScript
+origin in Google Cloud Console; the popup flow sends its one-time authorization code to
+the backend, which exchanges it for Google tokens.
 
 ## Installation
 
@@ -250,6 +226,17 @@ Apply your schema to Postgres before running the backend.
 This project expects the schema represented in [backend/schema.sql](./backend/schema.sql).
 
 ## Running the App
+
+### Start the React frontend and FastAPI backend together
+
+From the repository root, run:
+
+```powershell
+npm run dev
+```
+
+Press `Ctrl+C` to stop both processes. The individual commands below are still
+available when you only need one part of the app.
 
 ### 1. Start FastAPI
 
@@ -295,20 +282,6 @@ npm run check
 This performs TypeScript checking, ESLint validation, and a production build. Formatting is
 kept separate: use `npm run format:check` to inspect it or `npm run format` to apply it.
 
-### 3. Start Streamlit
-
-For the legacy Streamlit UI, use another terminal:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-Set-Location backend
-streamlit run frontend.py
-```
-
-Streamlit UI:
-
-- Streamlit app: `http://localhost:8501`
-
 ## Typical Flow
 
 1. Sign in with Google.
@@ -349,7 +322,6 @@ LOG_LEVEL=INFO
 ## Security Notes
 
 - Never commit `.env`
-- Never commit `backend/.streamlit/secrets.toml`
 - Rotate any Google, Supabase, Qdrant, or database credentials if they were ever exposed
 - Keep `SUPABASE_SERVICE_ROLE_KEY` backend-only
 
