@@ -25,7 +25,7 @@ from src.services.ingestion_service import (
     IngestionQuotaExceededError,
     start_ingestion_job,
 )
-from src.services.search_service import SearchRateLimitError, enforce_search_rate_limit
+from src.services.search_service import SearchRateLimitError, create_search_query
 
 
 def image_bytes(width: int, height: int, image_format: str = "PNG") -> bytes:
@@ -156,10 +156,41 @@ class ResourceLimitTests(TestCase):
         create_job.assert_not_called()
 
     @patch("src.services.search_service.get_settings")
-    def test_rejects_user_over_search_rate_limit(self, settings) -> None:
+    def test_search_admission_locks_before_count_and_insert(self, settings) -> None:
         settings.return_value = image_settings(MAX_SEARCHES_PER_USER_PER_MINUTE=10)
         db = Mock()
-        db.query.return_value.filter.return_value.count.return_value = 10
+        lock_query = Mock()
+        count_query = Mock()
+        db.query.side_effect = [lock_query, count_query]
+        events: list[str] = []
+        lock_query.filter.return_value.with_for_update.return_value.one.side_effect = (
+            lambda: events.append("lock")
+        )
+        count_query.filter.return_value.count.side_effect = lambda: (
+            events.append("count") or 0
+        )
+        db.add.side_effect = lambda _query: events.append("insert")
+        db.commit.side_effect = lambda: events.append("commit")
+
+        query = create_search_query(db, user_id="user")
+
+        self.assertEqual(events, ["lock", "count", "insert", "commit"])
+        self.assertEqual(query.user_id, "user")
+        db.rollback.assert_not_called()
+
+    @patch("src.services.search_service.get_settings")
+    def test_rejects_user_over_search_rate_limit_and_releases_lock(self, settings) -> None:
+        settings.return_value = image_settings(MAX_SEARCHES_PER_USER_PER_MINUTE=10)
+        db = Mock()
+        lock_query = Mock()
+        count_query = Mock()
+        db.query.side_effect = [lock_query, count_query]
+        count_query.filter.return_value.count.return_value = 10
 
         with self.assertRaises(SearchRateLimitError):
-            enforce_search_rate_limit(db, "user")
+            create_search_query(db, user_id="user")
+
+        lock_query.filter.return_value.with_for_update.return_value.one.assert_called_once_with()
+        db.add.assert_not_called()
+        db.commit.assert_not_called()
+        db.rollback.assert_called_once_with()

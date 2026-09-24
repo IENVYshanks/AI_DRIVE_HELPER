@@ -21,6 +21,11 @@ from src.services.oauth_token_cipher import (
     encrypt_oauth_token,
     validate_oauth_token_encryption,
 )
+from src.services.rate_limit_service import (
+    RateLimitExceededError,
+    RateLimitUnavailableError,
+    enforce_google_oauth_rate_limit,
+)
 from src.services.session_service import (
     ACCESS_COOKIE_NAME,
     CSRF_COOKIE_NAME,
@@ -205,6 +210,21 @@ async def create_google_session(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Google OAuth request origin is invalid",
         )
+
+    client_ip = request.client.host if request.client is not None else "unknown"
+    try:
+        enforce_google_oauth_rate_limit(client_ip, settings)
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many Google authorization attempts",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except RateLimitUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google authorization is temporarily unavailable",
+        ) from exc
 
     try:
         google_session = await run_in_threadpool(

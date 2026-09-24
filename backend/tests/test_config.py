@@ -65,3 +65,10 @@ class ProductionSettingsTests(TestCase):
 
         with self.assertRaisesRegex(ValueError, "hexadecimal"):
             _ = settings.oauth_token_encryption_keys
+
+    def test_rejects_non_positive_google_oauth_rate_limit(self) -> None:
+        with self.assertRaises(ValidationError):
+            Settings(
+                **BASE_SETTINGS,
+                MAX_GOOGLE_OAUTH_ATTEMPTS_PER_IP_PER_MINUTE=0,
+            )

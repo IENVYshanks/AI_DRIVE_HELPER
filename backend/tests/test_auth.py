@@ -15,6 +15,10 @@ from src.db.database import get_db
 from src.routers.auth import persist_google_session
 from src.services.google_oauth_service import GoogleOAuthSession
 from src.services.oauth_token_cipher import decrypt_oauth_token
+from src.services.rate_limit_service import (
+    RateLimitExceededError,
+    RateLimitUnavailableError,
+)
 from src.services.session_service import InvalidSessionError, SessionCredentials
 
 OAUTH_ENCRYPTION_KEY = "11" * 32
@@ -117,6 +121,83 @@ class GoogleSessionTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 400)
+        exchange.assert_not_called()
+
+    @patch("src.routers.auth.enforce_google_oauth_rate_limit")
+    @patch("src.routers.auth.exchange_authorization_code")
+    def test_google_login_rate_limit_blocks_exchange(self, exchange, enforce_limit) -> None:
+        enforce_limit.side_effect = RateLimitExceededError(retry_after=37)
+        settings = get_settings().model_copy(
+            update={
+                "ENVIRONMENT": "test",
+                "AUTO_CREATE_TABLES": False,
+                "TRUSTED_HOSTS": "localhost,testserver",
+                "GOOGLE_CLIENT_ID": "client-id",
+                "GOOGLE_CLIENT_SECRET": "client-secret",
+                "GOOGLE_REDIRECT_URI": "http://localhost:5173",
+                "OAUTH_TOKEN_ENCRYPTION_KEYS": f"primary:{OAUTH_ENCRYPTION_KEY}",
+                "OAUTH_TOKEN_ACTIVE_KEY_ID": "primary",
+            }
+        )
+        app = create_app(settings)
+        app.dependency_overrides[get_settings] = lambda: settings
+        app.dependency_overrides[get_db] = lambda: Mock()
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/auth/google/session",
+                json={
+                    "code": "one-time-code",
+                    "redirect_uri": "http://localhost:5173",
+                },
+                headers={
+                    "Origin": "http://localhost:5173",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.headers["Retry-After"], "37")
+        exchange.assert_not_called()
+
+    @patch("src.routers.auth.enforce_google_oauth_rate_limit")
+    @patch("src.routers.auth.exchange_authorization_code")
+    def test_google_login_fails_closed_when_rate_limiter_is_unavailable(
+        self,
+        exchange,
+        enforce_limit,
+    ) -> None:
+        enforce_limit.side_effect = RateLimitUnavailableError("unavailable")
+        settings = get_settings().model_copy(
+            update={
+                "ENVIRONMENT": "test",
+                "AUTO_CREATE_TABLES": False,
+                "TRUSTED_HOSTS": "localhost,testserver",
+                "GOOGLE_CLIENT_ID": "client-id",
+                "GOOGLE_CLIENT_SECRET": "client-secret",
+                "GOOGLE_REDIRECT_URI": "http://localhost:5173",
+                "OAUTH_TOKEN_ENCRYPTION_KEYS": f"primary:{OAUTH_ENCRYPTION_KEY}",
+                "OAUTH_TOKEN_ACTIVE_KEY_ID": "primary",
+            }
+        )
+        app = create_app(settings)
+        app.dependency_overrides[get_settings] = lambda: settings
+        app.dependency_overrides[get_db] = lambda: Mock()
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/auth/google/session",
+                json={
+                    "code": "one-time-code",
+                    "redirect_uri": "http://localhost:5173",
+                },
+                headers={
+                    "Origin": "http://localhost:5173",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            )
+
+        self.assertEqual(response.status_code, 503)
         exchange.assert_not_called()
 
     @patch("src.routers.auth.create_session")

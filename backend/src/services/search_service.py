@@ -19,6 +19,7 @@ from src.models.face import Face
 from src.models.image import Image
 from src.models.search_query import SearchQuery
 from src.models.search_result import SearchResult
+from src.models.users import User
 from src.services.face_service import extract_primary_face_embedding
 from src.services.vector_service import search_similar_faces
 
@@ -47,15 +48,33 @@ def create_search_query(
     user_id,
     query_image_storage_key: str | None = None,
 ) -> SearchQuery:
-    """Create the Postgres record that tracks one search request."""
-    query = SearchQuery(
-        user_id=user_id,
-        query_image_storage_key=query_image_storage_key,
-    )
-    db.add(query)
-    db.commit()
-    db.refresh(query)
-    return query
+    """Atomically admit and record one rate-limited search request.
+
+    Locking the user's Postgres row serializes this short admission section
+    across API replicas. The count and insert therefore cannot race for the
+    same user, while searches belonging to different users remain concurrent.
+    """
+    try:
+        (
+            db.query(User.id)
+            .filter(User.id == user_id)
+            .with_for_update()
+            .one()
+        )
+        enforce_search_rate_limit(db, user_id)
+        query = SearchQuery(
+            user_id=user_id,
+            query_image_storage_key=query_image_storage_key,
+        )
+        db.add(query)
+        db.commit()
+        db.refresh(query)
+        return query
+    except Exception:
+        # A rejected or failed admission must release the transaction-scoped
+        # user-row lock immediately rather than waiting for request cleanup.
+        db.rollback()
+        raise
 
 
 def run_face_search(
@@ -71,7 +90,6 @@ def run_face_search(
     The query row is created before face detection so unsuccessful searches
     are still visible in history and can report latency and detection status.
     """
-    enforce_search_rate_limit(db, user_id)
     search_query = create_search_query(
         db,
         user_id=user_id,
