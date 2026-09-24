@@ -40,7 +40,7 @@ export const Route = createRootRoute({
         property: "og:description",
         content: "Search your private photo collection using secure face-similarity matching.",
       },
-      { name: "author", content: "IENVYshanks" },
+      { name: "author", content: "Ronit" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

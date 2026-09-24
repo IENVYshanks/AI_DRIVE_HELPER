@@ -13,9 +13,10 @@ FaceSeek is a full-stack face-similarity search application that:
 
 ## Creator
 
-Built and maintained by [IENVYshanks](https://github.com/IENVYshanks).
+Built and maintained by [Ronit](https://github.com/IENVYshanks).
 
 - Email: [sawaiyanronit12@gmail.com](mailto:sawaiyanronit12@gmail.com)
+- LinkedIn: [Ronit Sawaiyan](https://www.linkedin.com/in/ronit-sawaiyan-2b283918a)
 - Source: [github.com/IENVYshanks/ai_image_classifier](https://github.com/IENVYshanks/ai_image_classifier)
 - Live app: [ai-drive-helper.vercel.app](https://ai-drive-helper.vercel.app/)
 

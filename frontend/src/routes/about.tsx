@@ -12,6 +12,7 @@ import {
   Github,
   Heart,
   Images,
+  Linkedin,
   Mail,
   Search,
   Server,
@@ -340,7 +341,7 @@ function AboutPage() {
 
         <section className="mt-8 rounded-2xl border border-border bg-paper p-8 shadow-soft">
           <p className="text-xs uppercase tracking-[0.2em] text-ochre">Creator</p>
-          <h2 className="mt-3 font-serif text-3xl">Built by IENVYshanks</h2>
+          <h2 className="mt-3 font-serif text-3xl">Built by Ronit</h2>
           <p className="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
             FaceSeek is an open-source project exploring private, useful face-similarity search
             across personal photo collections.
@@ -359,6 +360,14 @@ function AboutPage() {
               className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               <Mail className="h-4 w-4" aria-hidden /> Contact
+            </a>
+            <a
+              href="https://www.linkedin.com/in/ronit-sawaiyan-2b283918a"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Linkedin className="h-4 w-4" aria-hidden /> LinkedIn
             </a>
           </div>
         </section>
