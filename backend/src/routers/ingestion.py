@@ -6,12 +6,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.orm import Session
 
 from src.db.config import get_settings
 from src.db.database import SessionLocal, get_db
 from src.dependencies import get_current_user
+from src.ingestion.errors import (
+    IMAGE_PROCESSING_FAILED_MESSAGE,
+    INGESTION_FAILED_MESSAGE,
+)
 from src.models.image import Image
 from src.models.ingestion_job import IngestionJob
 from src.models.user_folder import UserFolder
@@ -53,6 +57,12 @@ class FolderResponse(BaseModel):
     failed_images: int
     error_message: str | None
 
+    @field_validator("error_message", mode="before")
+    @classmethod
+    def mask_internal_error(cls, value: object) -> str | None:
+        """Keep historical raw failures out of API responses."""
+        return INGESTION_FAILED_MESSAGE if value else None
+
 
 class IngestionJobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -66,6 +76,12 @@ class IngestionJobResponse(BaseModel):
     failed: int
     error_message: str | None
     failed_file_ids: list[str] | None
+
+    @field_validator("error_message", mode="before")
+    @classmethod
+    def mask_internal_error(cls, value: object) -> str | None:
+        """Keep historical raw failures out of API responses."""
+        return INGESTION_FAILED_MESSAGE if value else None
 
 
 class IngestedImageResponse(BaseModel):
@@ -236,7 +252,7 @@ def _to_ingested_image_response(image: Image) -> IngestedImageResponse:
         file_size_bytes=image.file_size_bytes,
         status=image.status,
         face_count=image.face_count or 0,
-        error_message=image.error_message,
+        error_message=(IMAGE_PROCESSING_FAILED_MESSAGE if image.error_message else None),
         image_url=image_url,
     )
 

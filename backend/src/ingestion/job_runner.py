@@ -11,6 +11,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from src.ingestion.errors import INGESTION_FAILED_MESSAGE
 from src.ingestion.retry import process_drive_files, retry_failed_files
 from src.ingestion.state import record_final_failures
 from src.models.ingestion_job import IngestionJob
@@ -115,7 +116,17 @@ def run_ingestion_job(db: Session, *, job_id) -> IngestionJob:
         db.rollback()
         logger.exception("Unhandled ingestion failure job_id=%s: %s", job.id, exc)
         if folder is not None:
-            mark_folder_failed(db, folder, str(exc), auto_commit=False)
-        mark_job_failed(db, job, str(exc), auto_commit=False)
+            mark_folder_failed(
+                db,
+                folder,
+                INGESTION_FAILED_MESSAGE,
+                auto_commit=False,
+            )
+        mark_job_failed(
+            db,
+            job,
+            INGESTION_FAILED_MESSAGE,
+            auto_commit=False,
+        )
         db.commit()
         return job

@@ -14,6 +14,7 @@ from time import perf_counter
 from sqlalchemy.orm import Session
 
 from src.db.config import get_settings
+from src.ingestion.errors import IMAGE_PROCESSING_FAILED_MESSAGE
 from src.ingestion.results import FileProcessResult
 from src.ingestion.state import (
     get_existing_image_for_drive_file,
@@ -330,7 +331,6 @@ def _handle_processing_failure(
 ) -> str:
     """Rollback partial relational work and persist a retryable failure state."""
     db.rollback()
-    error_message = str(exc)
     logger.exception(
         "Failed processing drive_file_id=%s job_id=%s attempt=%s: %s",
         drive_file.get("id"),
@@ -343,6 +343,6 @@ def _handle_processing_failure(
         job=job,
         folder=folder,
         drive_file=drive_file,
-        error_message=error_message,
+        error_message=IMAGE_PROCESSING_FAILED_MESSAGE,
     )
-    return error_message
+    return IMAGE_PROCESSING_FAILED_MESSAGE
