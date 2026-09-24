@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from src.services.drive_service import get_drive_service
+from src.services.drive_service import FOLDER_MIME_TYPE, get_drive_service, list_child_folders
 from src.services.oauth_token_cipher import decrypt_oauth_token, encrypt_oauth_token
 
 
@@ -13,6 +13,56 @@ OAUTH_ENCRYPTION_KEY = "11" * 32
 
 
 class DriveServiceTests(TestCase):
+    @patch("src.services.drive_service.get_settings")
+    @patch("src.services.drive_service.get_drive_service")
+    def test_lists_paginated_child_folders_only(
+        self,
+        get_service,
+        settings,
+    ) -> None:
+        settings.return_value = SimpleNamespace(MAX_DRIVE_FOLDER_ITEMS=10)
+        first_page = {
+            "files": [
+                {
+                    "id": "folder-b",
+                    "name": "Beta",
+                    "mimeType": FOLDER_MIME_TYPE,
+                    "parents": ["root"],
+                },
+                {
+                    "id": "image-a",
+                    "name": "Photo",
+                    "mimeType": "image/jpeg",
+                    "parents": ["root"],
+                },
+            ],
+            "nextPageToken": "next-page",
+        }
+        second_page = {
+            "files": [
+                {
+                    "id": "folder-a",
+                    "name": "Alpha",
+                    "mimeType": FOLDER_MIME_TYPE,
+                    "parents": ["root"],
+                }
+            ]
+        }
+        request = get_service.return_value.files.return_value.list
+        request.return_value.execute.side_effect = [first_page, second_page]
+
+        result = list_child_folders("root", "user-id", Mock())
+
+        self.assertEqual(
+            result,
+            [
+                {"id": "folder-b", "name": "Beta", "parent_id": "root"},
+                {"id": "folder-a", "name": "Alpha", "parent_id": "root"},
+            ],
+        )
+        self.assertEqual(request.call_count, 2)
+        self.assertIn("mimeType=", request.call_args_list[0].kwargs["q"])
+
     @patch("src.services.drive_service.build")
     @patch("src.services.drive_service.GoogleAuthRequest")
     @patch("src.services.drive_service.Credentials")

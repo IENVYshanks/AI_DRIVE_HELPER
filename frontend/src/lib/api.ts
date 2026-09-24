@@ -26,6 +26,17 @@ export type FolderResponse = {
   error_message: string | null;
 };
 
+export type DriveFolderItemResponse = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+};
+
+export type DriveFolderBrowserResponse = {
+  current: DriveFolderItemResponse;
+  folders: DriveFolderItemResponse[];
+};
+
 export type IngestionJobResponse = {
   id: string;
   folder_id: string | null;
@@ -209,6 +220,11 @@ export function upsertDriveFolder(
       folder_name: folderName || null,
     },
   });
+}
+
+export function browseDriveFolders(parentId = "root"): Promise<DriveFolderBrowserResponse> {
+  const query = new URLSearchParams({ parent_id: parentId });
+  return apiRequest<DriveFolderBrowserResponse>(`/ingestion/drive/folders?${query}`);
 }
 
 export function startFolderIngestion(folderId: string): Promise<IngestionJobResponse> {

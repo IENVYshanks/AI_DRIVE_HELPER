@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import io
 from datetime import timezone
-from typing import Any
+from typing import Any, TypedDict
 
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2.credentials import Credentials
@@ -33,6 +33,14 @@ FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 
 class DriveDownloadLimitExceeded(ValueError):
     """Raised before a Drive response can exceed the configured memory budget."""
+
+
+class DriveFolderMetadata(TypedDict):
+    """Safe folder metadata returned to the authenticated frontend."""
+
+    id: str
+    name: str
+    parent_id: str | None
 
 
 class _LimitedBytesIO(io.BytesIO):
@@ -172,9 +180,55 @@ def get_folder_metadata(folder_id: str, user_id, db: Session) -> dict[str, Any]:
     service = get_drive_service(user_id, db)
     return (
         service.files()
-        .get(fileId=folder_id, fields="id, name, mimeType")
+        .get(fileId=folder_id, fields="id, name, mimeType, parents")
         .execute()
     )
+
+
+def list_child_folders(
+    parent_id: str,
+    user_id,
+    db: Session,
+) -> list[DriveFolderMetadata]:
+    """List direct child folders without exposing Google credentials."""
+    service = get_drive_service(user_id, db)
+    folders: list[DriveFolderMetadata] = []
+    page_token = None
+    settings = get_settings()
+    while True:
+        response = (
+            service.files()
+            .list(
+                q=(
+                    f"'{parent_id}' in parents and trashed=false and "
+                    f"mimeType='{FOLDER_MIME_TYPE}'"
+                ),
+                spaces="drive",
+                fields="nextPageToken, files(id, name, mimeType, parents)",
+                orderBy="name_natural",
+                pageSize=1000,
+                pageToken=page_token,
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+        for item in response.get("files", []):
+            if item.get("mimeType") != FOLDER_MIME_TYPE:
+                continue
+            folders.append(
+                {
+                    "id": item["id"],
+                    "name": item.get("name") or "Untitled folder",
+                    "parent_id": next(iter(item.get("parents", [])), None),
+                }
+            )
+            if len(folders) > settings.MAX_DRIVE_FOLDER_ITEMS:
+                raise ValueError("Google Drive contains too many folders to browse")
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+    return folders
 
 
 def download_file_bytes(file_id: str, user_id, db: Session) -> bytes:

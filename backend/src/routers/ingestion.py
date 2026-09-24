@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.orm import Session
@@ -21,8 +23,10 @@ from src.models.ingestion_job import IngestionJob
 from src.models.user_folder import UserFolder
 from src.models.users import User
 from src.services.ingestion_service import (
+    DriveFolderBrowserError,
     DuplicateIngestionJobError,
     IngestionQuotaExceededError,
+    browse_drive_folders,
     create_or_update_folder,
     get_all_images_for_user,
     get_folder_for_user,
@@ -34,6 +38,7 @@ from src.services.job_service import mark_job_failed
 from src.services.storage_service import get_signed_url, storage_is_configured
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
+logger = logging.getLogger(__name__)
 
 
 class UpsertFolderRequest(BaseModel):
@@ -99,6 +104,17 @@ class IngestedImageResponse(BaseModel):
     image_url: str | None = None
 
 
+class DriveFolderItemResponse(BaseModel):
+    id: str
+    name: str
+    parent_id: str | None
+
+
+class DriveFolderBrowserResponse(BaseModel):
+    current: DriveFolderItemResponse
+    folders: list[DriveFolderItemResponse]
+
+
 @router.post("/folders", response_model=FolderResponse, status_code=status.HTTP_201_CREATED)
 async def upsert_folder(
     payload: UpsertFolderRequest,
@@ -118,6 +134,41 @@ async def upsert_folder(
         drive_folder_id=payload.drive_folder_id,
         folder_name=payload.folder_name,
     )
+
+
+@router.get("/drive/folders", response_model=DriveFolderBrowserResponse)
+async def browse_google_drive_folders(
+    parent_id: Annotated[
+        str,
+        Query(min_length=1, max_length=255, pattern=r"^(root|[A-Za-z0-9_-]+)$"),
+    ] = "root",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DriveFolderBrowserResponse:
+    try:
+        current, folders = await run_in_threadpool(
+            browse_drive_folders,
+            db,
+            user_id=current_user.id,
+            parent_id=parent_id,
+        )
+    except DriveFolderBrowserError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.warning(
+            "Drive folder browse failed user_id=%s parent_id=%s error_type=%s",
+            current_user.id,
+            parent_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not load Google Drive folders",
+        ) from exc
+    return DriveFolderBrowserResponse(current=current, folders=folders)
 
 
 @router.post(

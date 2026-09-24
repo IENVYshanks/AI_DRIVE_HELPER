@@ -15,6 +15,12 @@ from src.ingestion.job_runner import run_ingestion_job
 from src.models.image import Image
 from src.models.ingestion_job import IngestionJob
 from src.models.user_folder import UserFolder
+from src.services.drive_service import (
+    FOLDER_MIME_TYPE,
+    DriveFolderMetadata,
+    get_folder_metadata,
+    list_child_folders,
+)
 from src.services.folder_service import upsert_user_folder
 from src.services.job_service import create_ingestion_job
 
@@ -27,6 +33,35 @@ class DuplicateIngestionJobError(ValueError):
 
 class IngestionQuotaExceededError(ValueError):
     """Raised when a user reaches the configured active-job limit."""
+
+
+class DriveFolderBrowserError(ValueError):
+    """Raised when a requested Drive location is not a folder."""
+
+
+def browse_drive_folders(
+    db: Session,
+    *,
+    user_id,
+    parent_id: str,
+) -> tuple[DriveFolderMetadata, list[DriveFolderMetadata]]:
+    """Return one Drive folder and its direct child folders."""
+    if parent_id == "root":
+        current: DriveFolderMetadata = {
+            "id": "root",
+            "name": "My Drive",
+            "parent_id": None,
+        }
+    else:
+        metadata = get_folder_metadata(parent_id, user_id, db)
+        if metadata.get("mimeType") != FOLDER_MIME_TYPE:
+            raise DriveFolderBrowserError("The selected Drive item is not a folder")
+        current = {
+            "id": metadata["id"],
+            "name": metadata.get("name") or "Untitled folder",
+            "parent_id": next(iter(metadata.get("parents", [])), None),
+        }
+    return current, list_child_folders(parent_id, user_id, db)
 
 
 def create_or_update_folder(
