@@ -196,6 +196,66 @@ def search_similar_faces(*, user_id, embedding: Iterable[float], limit: int = 10
     return response.points
 
 
+def upsert_demo_person_embedding(
+    *, person_id, user_id, label: str, embedding: Iterable[float]
+) -> str:
+    """Store one named demo centroid outside the ordinary face collection."""
+    embedding_list = list(embedding)
+    if not embedding_list:
+        raise ValueError("Embedding vector is empty")
+
+    settings = get_settings()
+    collection_name = f"{settings.QDRANT_COLLECTION_NAME}_demo_people"
+    client = get_qdrant_client()
+    collections = client.get_collections().collections
+    if collection_name not in {collection.name for collection in collections}:
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=models.VectorParams(
+                size=len(embedding_list),
+                distance=models.Distance.COSINE,
+            ),
+        )
+    for field_name in ("user_id", "person_id", "label"):
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name=field_name,
+            field_schema=models.PayloadSchemaType.KEYWORD,
+        )
+
+    point_id = str(person_id)
+    client.upsert(
+        collection_name=collection_name,
+        points=[
+            models.PointStruct(
+                id=point_id,
+                vector=embedding_list,
+                payload={
+                    "user_id": str(user_id),
+                    "person_id": point_id,
+                    "label": label,
+                },
+            )
+        ],
+        wait=True,
+    )
+    return point_id
+
+
+def set_face_cluster_payload(*, point_ids: Iterable[str], cluster_id) -> None:
+    """Synchronize named Postgres cluster membership into Qdrant payloads."""
+    ids = list(point_ids)
+    if not ids:
+        return
+    settings = get_settings()
+    get_qdrant_client().set_payload(
+        collection_name=settings.QDRANT_COLLECTION_NAME,
+        payload={"cluster_id": str(cluster_id)},
+        points=ids,
+        wait=True,
+    )
+
+
 def _ensure_payload_indexes() -> None:
     """Ensure filterable identifiers are indexed for efficient searches."""
     settings = get_settings()

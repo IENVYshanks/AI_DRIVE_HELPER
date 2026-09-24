@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, User as UserIcon, Aperture } from "lucide-react";
+import { LogOut, Aperture } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { signOut } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/45 shadow-soft backdrop-blur-2xl supports-[backdrop-filter]:bg-background/35">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <div className="flex items-center gap-6">
           {user ? (
@@ -32,9 +32,7 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
                   aria-label="Profile"
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-sunset text-primary-foreground shadow-soft transition-transform hover:scale-105"
                 >
-                  <span className="text-sm font-medium">
-                    {user.name.charAt(0).toUpperCase()}
-                  </span>
+                  <span className="text-sm font-medium">{user.name.charAt(0).toUpperCase()}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
@@ -46,10 +44,14 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/dashboard" className="cursor-pointer">Dashboard</Link>
+                  <Link to="/dashboard" className="cursor-pointer">
+                    Dashboard
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link to="/query" className="cursor-pointer">Find by photo</Link>
+                  <Link to="/query" className="cursor-pointer">
+                    Find by photo
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -94,17 +96,9 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
               Logout
             </Button>
           ) : (
-            <>
-              <Link to="/about" className="hidden text-sm text-muted-foreground hover:text-foreground md:inline">
-                About
-              </Link>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/">
-                  <UserIcon className="mr-2 h-4 w-4" />
-                  Sign in
-                </Link>
-              </Button>
-            </>
+            <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground">
+              About
+            </Link>
           )}
         </div>
       </div>
