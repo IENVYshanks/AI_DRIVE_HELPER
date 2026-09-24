@@ -18,9 +18,23 @@ depends_on = None
 
 def upgrade() -> None:
     """Create the initial application tables and enum types."""
-    Base.metadata.create_all(bind=op.get_bind(), checkfirst=True)
+    initial_tables = [
+        table for table in Base.metadata.tables.values() if table.name != "auth_sessions"
+    ]
+    Base.metadata.create_all(
+        bind=op.get_bind(),
+        tables=initial_tables,
+        checkfirst=True,
+    )
 
 
 def downgrade() -> None:
     """Remove the initial application schema."""
-    Base.metadata.drop_all(bind=op.get_bind(), checkfirst=True)
+    initial_tables = [
+        table for table in Base.metadata.tables.values() if table.name != "auth_sessions"
+    ]
+    Base.metadata.drop_all(
+        bind=op.get_bind(),
+        tables=initial_tables,
+        checkfirst=True,
+    )

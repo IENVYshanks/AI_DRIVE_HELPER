@@ -65,6 +65,8 @@ def process_drive_file(
             _mark_file_skipped(db, job, folder, drive_file_id, attempt_label)
             return FileProcessResult(drive_file=drive_file)
 
+        _validate_drive_file_limits(drive_file)
+
         # The order matters: create relational identity first, then external
         # objects can consistently use the image/face IDs as stable keys.
         image = _prepare_image_for_processing(db, job, folder, drive_file)
@@ -185,6 +187,40 @@ def _download_drive_file(db: Session, job: IngestionJob, drive_file_id: str) -> 
     if len(image_bytes) > max_bytes:
         raise ValueError(f"Drive image exceeds the {max_bytes}-byte ingestion limit")
     return image_bytes
+
+
+def _validate_drive_file_limits(drive_file: dict) -> None:
+    """Reject oversized Drive metadata before creating rows or downloading bytes."""
+    settings = get_settings()
+    raw_size = drive_file.get("size")
+    if raw_size is not None:
+        try:
+            file_size = int(raw_size)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Drive image size metadata is invalid") from exc
+        if file_size < 0:
+            raise ValueError("Drive image size metadata is invalid")
+        if file_size > settings.MAX_INGESTION_IMAGE_BYTES:
+            raise ValueError(
+                f"Drive image exceeds the {settings.MAX_INGESTION_IMAGE_BYTES}-byte ingestion limit"
+            )
+
+    metadata = drive_file.get("imageMediaMetadata") or {}
+    raw_width = metadata.get("width")
+    raw_height = metadata.get("height")
+    if raw_width is None or raw_height is None:
+        return
+    try:
+        width = int(raw_width)
+        height = int(raw_height)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Drive image dimension metadata is invalid") from exc
+    if width <= 0 or height <= 0:
+        raise ValueError("Drive image dimension metadata is invalid")
+    if width > settings.MAX_IMAGE_WIDTH or height > settings.MAX_IMAGE_HEIGHT:
+        raise ValueError("Drive image dimensions exceed the configured limit")
+    if width * height > settings.MAX_IMAGE_PIXELS:
+        raise ValueError("Drive image pixel count exceeds the configured limit")
 
 
 def _store_image_if_configured(

@@ -8,12 +8,13 @@ search history that the API can hydrate with image metadata and signed URLs.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
+from src.db.config import get_settings
 from src.models.face import Face
 from src.models.image import Image
 from src.models.search_query import SearchQuery
@@ -22,6 +23,22 @@ from src.services.face_service import extract_primary_face_embedding
 from src.services.vector_service import search_similar_faces
 
 logger = logging.getLogger(__name__)
+
+
+class SearchRateLimitError(ValueError):
+    """Raised when a user exceeds the configured rolling search quota."""
+
+
+def enforce_search_rate_limit(db: Session, user_id) -> None:
+    """Bound expensive searches per user over a rolling one-minute window."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=1)
+    recent_count = (
+        db.query(SearchQuery)
+        .filter(SearchQuery.user_id == user_id, SearchQuery.created_at >= cutoff)
+        .count()
+    )
+    if recent_count >= get_settings().MAX_SEARCHES_PER_USER_PER_MINUTE:
+        raise SearchRateLimitError("Search rate limit exceeded")
 
 
 def create_search_query(
@@ -54,6 +71,7 @@ def run_face_search(
     The query row is created before face detection so unsuccessful searches
     are still visible in history and can report latency and detection status.
     """
+    enforce_search_rate_limit(db, user_id)
     search_query = create_search_query(
         db,
         user_id=user_id,

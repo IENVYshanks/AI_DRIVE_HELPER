@@ -8,13 +8,25 @@ router and business workflow concerns in the ingestion package.
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
+from src.db.config import get_settings
 from src.ingestion.job_runner import run_ingestion_job
 from src.models.image import Image
 from src.models.ingestion_job import IngestionJob
 from src.models.user_folder import UserFolder
 from src.services.folder_service import upsert_user_folder
 from src.services.job_service import create_ingestion_job
+
+ACTIVE_JOB_STATUSES = ("queued", "running")
+
+
+class DuplicateIngestionJobError(ValueError):
+    """Raised when a folder already has active work for the same user."""
+
+
+class IngestionQuotaExceededError(ValueError):
+    """Raised when a user reaches the configured active-job limit."""
 
 
 def create_or_update_folder(
@@ -40,8 +52,41 @@ def start_ingestion_job(
     folder_id,
     job_type: str = "full",
 ) -> IngestionJob:
-    """Create a queued job; the router schedules its execution separately."""
-    return create_ingestion_job(db, user_id=user_id, folder_id=folder_id, job_type=job_type)
+    """Create a queued job only when duplicate and per-user limits allow it."""
+    active_for_folder = (
+        db.query(IngestionJob)
+        .filter(
+            IngestionJob.user_id == user_id,
+            IngestionJob.folder_id == folder_id,
+            IngestionJob.status.in_(ACTIVE_JOB_STATUSES),
+        )
+        .first()
+    )
+    if active_for_folder is not None:
+        raise DuplicateIngestionJobError("An ingestion job is already active for this folder")
+
+    active_job_count = (
+        db.query(IngestionJob)
+        .filter(
+            IngestionJob.user_id == user_id,
+            IngestionJob.status.in_(ACTIVE_JOB_STATUSES),
+        )
+        .count()
+    )
+    if active_job_count >= get_settings().MAX_ACTIVE_INGESTION_JOBS_PER_USER:
+        raise IngestionQuotaExceededError("Active ingestion job quota exceeded")
+    try:
+        return create_ingestion_job(
+            db,
+            user_id=user_id,
+            folder_id=folder_id,
+            job_type=job_type,
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        raise DuplicateIngestionJobError(
+            "An ingestion job is already active for this folder"
+        ) from exc
 
 
 def get_folder_for_user(db: Session, *, folder_id, user_id) -> UserFolder | None:

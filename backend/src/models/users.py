@@ -41,6 +41,9 @@ class User(Base):
     ingestion_jobs = relationship(
         "IngestionJob", back_populates="user", cascade="all, delete"
     )
+    auth_sessions = relationship(
+        "AuthSession", back_populates="user", cascade="all, delete-orphan"
+    )
     clustering_jobs = relationship(
         "ClusteringJob", back_populates="user", cascade="all, delete"
     )

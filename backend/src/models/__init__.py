@@ -1,3 +1,4 @@
+from src.models.auth_session import AuthSession
 from src.models.clustering_job import ClusteringJob
 from src.models.face import Face
 from src.models.image import Image
@@ -9,6 +10,7 @@ from src.models.user_folder import UserFolder
 from src.models.users import User
 
 __all__ = [
+    "AuthSession",
     "ClusteringJob",
     "Face",
     "Image",

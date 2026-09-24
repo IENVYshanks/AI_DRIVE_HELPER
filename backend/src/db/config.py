@@ -38,8 +38,20 @@ class Settings(BaseSettings):
     LOG_TO_CONSOLE: bool = True
     BACKEND_CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
     REQUEST_ID_HEADER: str = "X-Request-ID"
+    SESSION_COOKIE_SECURE: bool = False
+    SESSION_COOKIE_SAMESITE: str = "lax"
     MAX_QUERY_IMAGE_BYTES: int = 10 * 1024 * 1024
     MAX_INGESTION_IMAGE_BYTES: int = 25 * 1024 * 1024
+    MAX_IMAGE_WIDTH: int = 12_000
+    MAX_IMAGE_HEIGHT: int = 12_000
+    MAX_IMAGE_PIXELS: int = 40_000_000
+    MAX_IMAGE_FRAMES: int = 1
+    MAX_DRIVE_FOLDER_ITEMS: int = 5_000
+    MAX_INGESTION_FILES_PER_JOB: int = 1_000
+    MAX_ACTIVE_INGESTION_JOBS_PER_USER: int = 2
+    MAX_SEARCHES_PER_USER_PER_MINUTE: int = 10
+    MAX_CONCURRENT_FACE_INFERENCES: int = 2
+    FACE_INFERENCE_WAIT_SECONDS: int = 30
     TASK_QUEUE_MODE: str = "background"
     CELERY_BROKER_URL: str | None = None
     CELERY_RESULT_BACKEND: str | None = None
@@ -75,6 +87,8 @@ class Settings(BaseSettings):
             errors.append("BACKEND_CORS_ORIGINS cannot contain '*' when credentials are enabled")
         if not self.cors_origins:
             errors.append("BACKEND_CORS_ORIGINS must contain at least one trusted origin")
+        if not self.SESSION_COOKIE_SECURE:
+            errors.append("SESSION_COOKIE_SECURE must be true")
         if self.TASK_QUEUE_MODE != "celery":
             errors.append("TASK_QUEUE_MODE must be celery")
         if not self.CELERY_BROKER_URL:
@@ -118,10 +132,31 @@ class Settings(BaseSettings):
             raise ValueError("TASK_QUEUE_MODE must be background or celery")
         return normalized
 
-    @field_validator("MAX_QUERY_IMAGE_BYTES", "MAX_INGESTION_IMAGE_BYTES")
+    @field_validator("SESSION_COOKIE_SAMESITE")
+    @classmethod
+    def validate_cookie_samesite(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"lax", "strict", "none"}:
+            raise ValueError("SESSION_COOKIE_SAMESITE must be lax, strict, or none")
+        return normalized
+
+    @field_validator(
+        "MAX_QUERY_IMAGE_BYTES",
+        "MAX_INGESTION_IMAGE_BYTES",
+        "MAX_IMAGE_WIDTH",
+        "MAX_IMAGE_HEIGHT",
+        "MAX_IMAGE_PIXELS",
+        "MAX_IMAGE_FRAMES",
+        "MAX_DRIVE_FOLDER_ITEMS",
+        "MAX_INGESTION_FILES_PER_JOB",
+        "MAX_ACTIVE_INGESTION_JOBS_PER_USER",
+        "MAX_SEARCHES_PER_USER_PER_MINUTE",
+        "MAX_CONCURRENT_FACE_INFERENCES",
+        "FACE_INFERENCE_WAIT_SECONDS",
+    )
     @classmethod
     def validate_upload_limits(cls, value: int) -> int:
-        """Require positive request limits to avoid accidentally disabling them."""
+        """Require positive resource limits so they cannot be accidentally disabled."""
         if value <= 0:
             raise ValueError("image byte limits must be positive")
         return value

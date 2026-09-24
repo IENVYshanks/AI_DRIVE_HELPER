@@ -17,6 +17,8 @@ from src.models.ingestion_job import IngestionJob
 from src.models.user_folder import UserFolder
 from src.models.users import User
 from src.services.ingestion_service import (
+    DuplicateIngestionJobError,
+    IngestionQuotaExceededError,
     create_or_update_folder,
     get_all_images_for_user,
     get_folder_for_user,
@@ -126,13 +128,25 @@ async def start_folder_ingestion(
             detail="Folder not found",
         )
 
-    job = await run_in_threadpool(
-        start_ingestion_job,
-        db,
-        user_id=current_user.id,
-        folder_id=folder.id,
-        job_type=payload.job_type,
-    )
+    try:
+        job = await run_in_threadpool(
+            start_ingestion_job,
+            db,
+            user_id=current_user.id,
+            folder_id=folder.id,
+            job_type=payload.job_type,
+        )
+    except DuplicateIngestionJobError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except IngestionQuotaExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+            headers={"Retry-After": "30"},
+        ) from exc
     if get_settings().TASK_QUEUE_MODE == "celery":
         try:
             from src.tasks import run_folder_ingestion_task

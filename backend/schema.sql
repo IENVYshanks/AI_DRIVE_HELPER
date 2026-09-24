@@ -12,6 +12,7 @@ DROP TABLE IF EXISTS access_grants CASCADE;
 DROP TABLE IF EXISTS image_faces CASCADE;
 DROP TABLE IF EXISTS persons CASCADE;
 DROP TABLE IF EXISTS drive_tokens CASCADE;
+DROP TABLE IF EXISTS auth_sessions CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
 DROP TYPE IF EXISTS user_status CASCADE;
@@ -37,6 +38,21 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE auth_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    refresh_token_hash VARCHAR(64) NOT NULL,
+    previous_refresh_token_hash VARCHAR(64),
+    csrf_token_hash VARCHAR(64) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX ix_auth_sessions_user_id ON auth_sessions(user_id);
+CREATE INDEX ix_auth_sessions_expires_at ON auth_sessions(expires_at);
 
 CREATE TABLE user_folders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -176,6 +192,10 @@ CREATE TABLE ingestion_jobs (
     completed_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX uq_ingestion_jobs_active_folder
+ON ingestion_jobs(user_id, folder_id)
+WHERE status IN ('queued', 'running');
 
 CREATE TABLE clustering_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

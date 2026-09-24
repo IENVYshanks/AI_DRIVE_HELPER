@@ -1,65 +1,43 @@
 """Reusable FastAPI dependencies, primarily authenticated-user resolution."""
 
-from uuid import UUID
-
-import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from src.db.database import get_db
 from src.models.users import User
-from src.services.auth_service import decode_jwt
-
-bearer_scheme = HTTPBearer(auto_error=True)
+from src.services.session_service import (
+    ACCESS_COOKIE_NAME,
+    CSRF_COOKIE_NAME,
+    CSRF_HEADER_NAME,
+    InvalidSessionError,
+    authenticate_access_token,
+    validate_csrf,
+)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> User:
-    """Validate a bearer access token and load its active Postgres user.
+    """Validate the cookie session, CSRF token, and active Postgres user.
 
     Returning the User here lets protected routes share authentication and
     user scoping without duplicating token parsing or database lookups.
     """
-    token = credentials.credentials
-
     try:
-        payload = decode_jwt(token)
-    except jwt.InvalidTokenError as exc:
+        user, auth_session = authenticate_access_token(
+            db,
+            request.cookies.get(ACCESS_COOKIE_NAME),
+        )
+        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+            validate_csrf(
+                auth_session,
+                request.cookies.get(CSRF_COOKIE_NAME),
+                request.headers.get(CSRF_HEADER_NAME),
+            )
+    except InvalidSessionError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token",
+            detail="Authentication session is invalid",
         ) from exc
-
-    # Refresh tokens are valid JWTs but must never authorize API operations.
-    if payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Access token required",
-        )
-
-    subject = payload.get("sub")
-    if not subject:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token subject missing",
-        )
-
-    try:
-        user_id = UUID(subject)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token subject",
-        ) from exc
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None or user.status != "active":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not available",
-        )
-
     return user

@@ -1,7 +1,7 @@
-"""Password hashing and JWT creation used by authentication routes.
+"""Password hashing and short-lived JWT creation used by authentication routes.
 
 Google authentication establishes identity, while this module issues the
-application's own short-lived access token and longer-lived refresh token.
+application's short-lived access token bound to a revocable database session.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -40,18 +40,9 @@ def create_jwt(data: dict, expires_delta: timedelta | None = None) -> str:
     return jwt.encode(payload, tokens.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str, session_id: str) -> str:
     """Issue the short-lived token accepted by protected API endpoints."""
-    return create_jwt({"sub": subject, "type": "access"})
-
-
-def create_refresh_token(subject: str) -> str:
-    """Issue a longer-lived token intended only for renewing access."""
-    refresh_expires = timedelta(days=tokens.REFRESH_TOKEN_EXPIRE_DAYS)
-    return create_jwt(
-        {"sub": subject, "type": "refresh"},
-        expires_delta=refresh_expires,
-    )
+    return create_jwt({"sub": subject, "sid": session_id, "type": "access"})
 
 
 def decode_jwt(token: str) -> dict:

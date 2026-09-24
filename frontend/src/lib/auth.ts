@@ -1,4 +1,4 @@
-import { createGoogleSession } from "@/lib/api";
+import { createGoogleSession, logoutSession } from "@/lib/api";
 import { AUTH_STORAGE_KEY } from "@/lib/storage-keys";
 
 export type User = {
@@ -6,8 +6,6 @@ export type User = {
   email: string;
   name: string;
   avatarUrl?: string;
-  backendAccessToken?: string;
-  backendRefreshToken?: string;
 };
 
 type GoogleCodeResponse = {
@@ -54,7 +52,24 @@ export function getUser(): User | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as Partial<User>;
+    if (
+      typeof stored.id !== "string" ||
+      typeof stored.email !== "string" ||
+      typeof stored.name !== "string"
+    ) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
+    }
+    const user: User = {
+      id: stored.id,
+      email: stored.email,
+      name: stored.name,
+      avatarUrl: stored.avatarUrl,
+    };
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+    return user;
   } catch {
     return null;
   }
@@ -144,12 +159,14 @@ export async function signInWithGoogle(): Promise<User> {
     email: tokenPayload.user.email,
     name: tokenPayload.user.name || tokenPayload.user.email.split("@")[0],
     avatarUrl: tokenPayload.user.avatar_url || undefined,
-    backendAccessToken: tokenPayload.access_token,
-    backendRefreshToken: tokenPayload.refresh_token,
   });
 }
 
-export function signOut(): void {
-  localStorage.removeItem(AUTH_STORAGE_KEY);
-  window.dispatchEvent(new Event("auth-change"));
+export async function signOut(): Promise<void> {
+  try {
+    await logoutSession();
+  } finally {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.dispatchEvent(new Event("auth-change"));
+  }
 }

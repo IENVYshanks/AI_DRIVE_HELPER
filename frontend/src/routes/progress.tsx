@@ -54,12 +54,12 @@ function ProgressPage() {
   }, [navigate]);
 
   useEffect(() => {
-    if (!jobId || !user?.backendAccessToken || finished) return;
+    if (!jobId || !user || finished) return;
 
     let cancelled = false;
     const poll = async () => {
       try {
-        const nextJob = await getIngestionJob(user.backendAccessToken!, jobId);
+        const nextJob = await getIngestionJob(jobId);
         if (cancelled) return;
         setJob(nextJob);
         if (["done", "completed", "failed"].includes(nextJob.status.toLowerCase())) {
@@ -79,7 +79,7 @@ function ProgressPage() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [finished, jobId, user?.backendAccessToken]);
+  }, [finished, jobId, user]);
 
   useEffect(() => {
     if (jobId || !pending.length || done >= pending.length) return;

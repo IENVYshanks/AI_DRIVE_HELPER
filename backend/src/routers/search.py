@@ -13,7 +13,12 @@ from src.db.database import get_db
 from src.db.config import get_settings
 from src.dependencies import get_current_user
 from src.models.users import User
-from src.services.search_service import get_search_query_for_user, run_face_search
+from src.services.face_service import FaceInferenceBusyError, InvalidImageError
+from src.services.search_service import (
+    SearchRateLimitError,
+    get_search_query_for_user,
+    run_face_search,
+)
 from src.services.storage_service import get_signed_url, storage_is_configured
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -71,14 +76,32 @@ async def search_faces(
             detail="Uploaded image is empty",
         )
 
-    search_query = await run_in_threadpool(
-        run_face_search,
-        db,
-        user_id=current_user.id,
-        image_bytes=image_bytes,
-        query_image_storage_key=image.filename,
-        limit=limit,
-    )
+    try:
+        search_query = await run_in_threadpool(
+            run_face_search,
+            db,
+            user_id=current_user.id,
+            image_bytes=image_bytes,
+            query_image_storage_key=image.filename,
+            limit=limit,
+        )
+    except InvalidImageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except FaceInferenceBusyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Face processing is busy; retry later",
+            headers={"Retry-After": "5"},
+        ) from exc
+    except SearchRateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+            headers={"Retry-After": "60"},
+        ) from exc
     hydrated = await run_in_threadpool(
         get_search_query_for_user,
         db,

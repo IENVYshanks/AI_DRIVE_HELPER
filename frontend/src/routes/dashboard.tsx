@@ -74,7 +74,7 @@ function DashboardPage() {
       toast.error("Enter a Google Drive folder ID");
       return;
     }
-    if (!user?.backendAccessToken) {
+    if (!user) {
       toast.error("Sign in with Google before starting Drive ingestion");
       return;
     }
@@ -82,11 +82,10 @@ function DashboardPage() {
     setDriveLoading(true);
     try {
       const folder = await upsertDriveFolder(
-        user.backendAccessToken,
         folderId,
         driveFolderName.trim() || undefined,
       );
-      const job = await startFolderIngestion(user.backendAccessToken, folder.id);
+      const job = await startFolderIngestion(folder.id);
       setDriveJob(job);
       sessionStorage.setItem("photovault.ingestionJobId", job.id);
       toast.success("Drive ingestion started");

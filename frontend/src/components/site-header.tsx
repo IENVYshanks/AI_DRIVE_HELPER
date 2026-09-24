@@ -16,8 +16,8 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    signOut();
+  const handleLogout = async () => {
+    await signOut();
     navigate({ to: "/" });
   };
 

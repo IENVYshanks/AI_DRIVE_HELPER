@@ -9,14 +9,16 @@ from __future__ import annotations
 
 import io
 import threading
+import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from PIL import Image as PILImage
+from PIL import Image as PILImage, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from src.models.face import Face
 from src.models.image import Image
+from src.db.config import get_settings
 
 if TYPE_CHECKING:
     from insightface.app import FaceAnalysis
@@ -24,6 +26,46 @@ if TYPE_CHECKING:
 # Model initialization is expensive, so one analyzer is shared by the process.
 _FACE_ANALYZER_LOCK = threading.Lock()
 _FACE_ANALYZER: FaceAnalysis | None = None
+_INFERENCE_LIMIT_LOCK = threading.Lock()
+_INFERENCE_SEMAPHORE: threading.BoundedSemaphore | None = None
+_INFERENCE_LIMIT: int | None = None
+SUPPORTED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
+
+
+class InvalidImageError(ValueError):
+    """Raised when image structure or decoded dimensions violate policy."""
+
+
+class FaceInferenceBusyError(RuntimeError):
+    """Raised when the bounded inference queue cannot accept more work."""
+
+
+def decode_image_bytes(image_bytes: bytes) -> np.ndarray:
+    """Validate image structure and dimensions before allocating an RGB array."""
+    settings = get_settings()
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", PILImage.DecompressionBombWarning)
+            with PILImage.open(io.BytesIO(image_bytes)) as image:
+                image_format = (image.format or "").upper()
+                width, height = image.size
+                frame_count = getattr(image, "n_frames", 1)
+                if image_format not in SUPPORTED_IMAGE_FORMATS:
+                    raise InvalidImageError("Unsupported image format")
+                if width <= 0 or height <= 0:
+                    raise InvalidImageError("Image dimensions are invalid")
+                if width > settings.MAX_IMAGE_WIDTH or height > settings.MAX_IMAGE_HEIGHT:
+                    raise InvalidImageError("Image dimensions exceed the configured limit")
+                if width * height > settings.MAX_IMAGE_PIXELS:
+                    raise InvalidImageError("Image pixel count exceeds the configured limit")
+                if frame_count > settings.MAX_IMAGE_FRAMES:
+                    raise InvalidImageError("Multi-frame images are not supported")
+                image.load()
+                return np.asarray(image.convert("RGB"))
+    except InvalidImageError:
+        raise
+    except (UnidentifiedImageError, OSError, PILImage.DecompressionBombError) as exc:
+        raise InvalidImageError("Image data is invalid") from exc
 
 
 def extract_faces_and_embeddings(image_bytes: bytes) -> list[dict[str, Any]]:
@@ -33,13 +75,19 @@ def extract_faces_and_embeddings(image_bytes: bytes) -> list[dict[str, Any]]:
     the image. Individual detections missing an embedding or box are ignored.
     """
     # Pillow decodes into RGB, while InsightFace/OpenCV expects BGR ordering.
-    rgb_array = np.array(PILImage.open(io.BytesIO(image_bytes)).convert("RGB"))
+    rgb_array = decode_image_bytes(image_bytes)
     bgr_array = rgb_array[:, :, ::-1]
 
+    semaphore = _get_inference_semaphore()
+    wait_seconds = get_settings().FACE_INFERENCE_WAIT_SECONDS
+    if not semaphore.acquire(timeout=wait_seconds):
+        raise FaceInferenceBusyError("Face inference capacity is busy")
     try:
         detections = _get_face_analyzer().get(bgr_array)
     except Exception:
         return []
+    finally:
+        semaphore.release()
 
     results: list[dict[str, Any]] = []
     for index, detection in enumerate(detections):
@@ -166,3 +214,15 @@ def _get_face_analyzer() -> FaceAnalysis:
                 _FACE_ANALYZER = analyzer
 
     return _FACE_ANALYZER
+
+
+def _get_inference_semaphore() -> threading.BoundedSemaphore:
+    """Return a process-wide semaphore sized from validated configuration."""
+    global _INFERENCE_SEMAPHORE, _INFERENCE_LIMIT
+    limit = get_settings().MAX_CONCURRENT_FACE_INFERENCES
+    if _INFERENCE_SEMAPHORE is None or _INFERENCE_LIMIT != limit:
+        with _INFERENCE_LIMIT_LOCK:
+            if _INFERENCE_SEMAPHORE is None or _INFERENCE_LIMIT != limit:
+                _INFERENCE_SEMAPHORE = threading.BoundedSemaphore(limit)
+                _INFERENCE_LIMIT = limit
+    return _INFERENCE_SEMAPHORE

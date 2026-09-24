@@ -110,14 +110,14 @@ function QueryPage() {
       toast.error("Add a photo first");
       return;
     }
-    if (!user?.backendAccessToken) {
+    if (!user) {
       toast.error("Sign in with Google before searching");
       return;
     }
 
     setSearching(true);
     try {
-      const response = await searchFaces(user.backendAccessToken, queryFile, count);
+      const response = await searchFaces(queryFile, count);
       setResults(response);
       if (!response.face_detected) {
         toast.error("No face detected in the query image");

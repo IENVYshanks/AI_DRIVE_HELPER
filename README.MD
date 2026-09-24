@@ -160,18 +160,46 @@ QDRANT_API_KEY=
 QDRANT_COLLECTION_NAME=face_embeddings
 ```
 
-### JWT / backend auth
+### Backend sessions
 
 ```env
 SECRET_KEY=your_secret_key_here
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
+SESSION_COOKIE_SECURE=false
+SESSION_COOKIE_SAMESITE=lax
 ```
+
+The backend stores revocable session records and sends authentication tokens only in
+`HttpOnly` cookies. Set `SESSION_COOKIE_SECURE=true` in production. For local HTTP
+development, open both frontend and backend through the same hostname (for example,
+`localhost`) so browsers accept the same-site cookies.
+
+### Image and workload limits
+
+```env
+MAX_QUERY_IMAGE_BYTES=10485760
+MAX_INGESTION_IMAGE_BYTES=26214400
+MAX_IMAGE_WIDTH=12000
+MAX_IMAGE_HEIGHT=12000
+MAX_IMAGE_PIXELS=40000000
+MAX_IMAGE_FRAMES=1
+MAX_DRIVE_FOLDER_ITEMS=5000
+MAX_INGESTION_FILES_PER_JOB=1000
+MAX_ACTIVE_INGESTION_JOBS_PER_USER=2
+MAX_SEARCHES_PER_USER_PER_MINUTE=10
+MAX_CONCURRENT_FACE_INFERENCES=2
+FACE_INFERENCE_WAIT_SECONDS=30
+```
+
+Drive downloads are streamed into a bounded buffer. Actual image format, dimensions,
+pixel count, and frame count are checked before face inference. Tune these limits for
+the memory and CPU available to each backend or worker process.
 
 ### Frontend to backend
 
 ```env
-BACKEND_URL=http://127.0.0.1:8000
+BACKEND_URL=http://localhost:8000
 BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
@@ -186,7 +214,7 @@ GOOGLE_REDIRECT_URI=http://localhost:5173
 For the React frontend, also set:
 
 ```env
-VITE_BACKEND_URL=http://127.0.0.1:8000
+VITE_BACKEND_URL=http://localhost:8000
 VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 ```
 
@@ -221,7 +249,14 @@ npm install
 
 ## Database Schema
 
-Apply your schema to Postgres before running the backend.
+Apply your schema to Postgres before running the backend. Existing installations must
+run the Alembic migrations that create the `auth_sessions` table and the active-job
+uniqueness guard:
+
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
+```
 
 This project expects the schema represented in [backend/schema.sql](./backend/schema.sql).
 
@@ -248,7 +283,7 @@ uvicorn main:app --reload
 
 Backend docs:
 
-- Swagger UI: `http://127.0.0.1:8000/docs`
+- Swagger UI: `http://localhost:8000/docs`
 
 ### 2. Start React Frontend
 

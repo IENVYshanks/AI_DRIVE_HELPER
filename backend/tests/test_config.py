@@ -42,6 +42,7 @@ class ProductionSettingsTests(TestCase):
             GOOGLE_CLIENT_ID="google-client-id",
             GOOGLE_CLIENT_SECRET="google-client-secret",
             GOOGLE_REDIRECT_URI="https://app.example.com",
+            SESSION_COOKIE_SECURE=True,
         )
 
         self.assertTrue(settings.is_production)
