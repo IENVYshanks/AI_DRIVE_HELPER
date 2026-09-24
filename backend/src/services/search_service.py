@@ -171,8 +171,13 @@ def persist_search_results(db: Session, *, query: SearchQuery, qdrant_results) -
     # Fetch all referenced faces in one query rather than once per Qdrant hit.
     faces = (
         db.query(Face)
+        .join(Image, Face.image_id == Image.id)
         .options(joinedload(Face.image))
-        .filter(Face.id.in_(face_ids))
+        .filter(
+            Face.id.in_(face_ids),
+            Face.user_id == query.user_id,
+            Image.user_id == query.user_id,
+        )
         .all()
     )
     face_map = {face.id: face for face in faces}
@@ -191,7 +196,12 @@ def persist_search_results(db: Session, *, query: SearchQuery, qdrant_results) -
 
         face = face_map.get(face_id)
         # A vector may outlive its relational row after partial cleanup.
-        if face is None or face.image is None:
+        if (
+            face is None
+            or face.image is None
+            or face.user_id != query.user_id
+            or face.image.user_id != query.user_id
+        ):
             continue
 
         result = SearchResult(
