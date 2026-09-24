@@ -69,7 +69,9 @@ function QueryPage() {
   const startCamera = async () => {
     setCameraOpen(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -122,7 +124,9 @@ function QueryPage() {
       if (!response.face_detected) {
         toast.error("No face detected in the query image");
       } else {
-        toast.success(`Found ${response.results_count} result${response.results_count === 1 ? "" : "s"}`);
+        toast.success(
+          `Found ${response.results_count} result${response.results_count === 1 ? "" : "s"}`,
+        );
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Search failed");
@@ -144,12 +148,16 @@ function QueryPage() {
     <RequireAuth>
       <div className="min-h-screen bg-background">
         <SiteHeader />
-        <main className="mx-auto max-w-5xl px-5 py-10 sm:py-14">
+        <main className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
           <div className="mb-8 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-ochre">Find by photo</p>
-              <h1 className="mt-2 font-serif text-4xl sm:text-5xl">Show us a frame.</h1>
-              <p className="mt-2 text-muted-foreground">The backend will search your ingested face embeddings.</p>
+              <h1 className="mt-2 font-serif text-6xl leading-[0.95] sm:text-8xl">
+                Show us a frame.
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                The backend will search your ingested face embeddings.
+              </p>
             </div>
 
             <Dialog open={shareOpen} onOpenChange={setShareOpen}>
@@ -162,9 +170,7 @@ function QueryPage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle className="font-serif">Share this page</DialogTitle>
-                  <DialogDescription>
-                    Scan the QR code or copy the link.
-                  </DialogDescription>
+                  <DialogDescription>Scan the QR code or copy the link.</DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col items-center gap-4 py-2">
                   <div className="rounded-lg border border-border bg-background p-4 shadow-soft">
@@ -182,7 +188,7 @@ function QueryPage() {
           </div>
 
           <section className="grid gap-6 md:grid-cols-[1fr_1fr]">
-            <div className="rounded-2xl border border-border bg-paper p-6 shadow-soft">
+            <div className="border-t-2 border-foreground bg-paper p-6 shadow-soft">
               <p className="font-serif text-xl">Your query image</p>
               <div className="mt-4 aspect-square overflow-hidden rounded-xl border border-border bg-background">
                 {queryImage ? (
@@ -212,7 +218,7 @@ function QueryPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-paper p-6 shadow-soft">
+            <div className="border-t-2 border-foreground bg-paper p-6 shadow-soft">
               <p className="font-serif text-xl">How many results?</p>
               <p className="mt-1 text-sm text-muted-foreground">Between 1 and 24 photos.</p>
               <div className="mt-6 flex items-baseline gap-3">
@@ -239,14 +245,19 @@ function QueryPage() {
             <section className="mt-12">
               <div className="mb-4 flex items-end justify-between">
                 <h2 className="font-serif text-2xl">Matches</h2>
-                <span className="text-sm text-muted-foreground">{results.results_count} results</span>
+                <span className="text-sm text-muted-foreground">
+                  {results.results_count} results
+                </span>
               </div>
               {results.results.length === 0 ? (
                 <p className="text-muted-foreground">No similar faces were found.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                   {results.results.map((item) => (
-                    <div key={item.id} className="group overflow-hidden rounded-lg border border-border shadow-soft">
+                    <div
+                      key={item.id}
+                      className="group overflow-hidden rounded-lg border border-border shadow-soft"
+                    >
                       <div className="aspect-square overflow-hidden bg-background">
                         {item.image_url ? (
                           <img
@@ -262,7 +273,9 @@ function QueryPage() {
                         )}
                       </div>
                       <div className="border-t border-border bg-paper p-3">
-                        <p className="truncate text-sm font-medium">{item.image_name || item.drive_file_id}</p>
+                        <p className="truncate text-sm font-medium">
+                          {item.image_name || item.drive_file_id}
+                        </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Score {item.similarity_score?.toFixed(4) || "n/a"}
                         </p>
@@ -283,7 +296,9 @@ function QueryPage() {
                 <video ref={videoRef} className="h-full w-full" playsInline muted />
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={stopCamera}>Cancel</Button>
+                <Button variant="outline" onClick={stopCamera}>
+                  Cancel
+                </Button>
                 <Button onClick={captureFrame}>Capture</Button>
               </div>
             </DialogContent>

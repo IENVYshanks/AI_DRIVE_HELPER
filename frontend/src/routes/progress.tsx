@@ -68,7 +68,9 @@ function ProgressPage() {
         }
       } catch (pollError) {
         if (!cancelled) {
-          setError(pollError instanceof Error ? pollError.message : "Could not load ingestion status");
+          setError(
+            pollError instanceof Error ? pollError.message : "Could not load ingestion status",
+          );
         }
       }
     };
@@ -83,7 +85,10 @@ function ProgressPage() {
 
   useEffect(() => {
     if (jobId || !pending.length || done >= pending.length) return;
-    const timeoutId = window.setTimeout(() => setDone((value) => value + 1), 500 + Math.random() * 400);
+    const timeoutId = window.setTimeout(
+      () => setDone((value) => value + 1),
+      500 + Math.random() * 400,
+    );
     return () => window.clearTimeout(timeoutId);
   }, [done, jobId, pending.length]);
 
@@ -112,11 +117,11 @@ function ProgressPage() {
     <RequireAuth>
       <div className="min-h-screen bg-background">
         <SiteHeader />
-        <main className="mx-auto max-w-2xl px-5 py-16 sm:py-24">
+        <main className="mx-auto max-w-3xl px-5 py-16 sm:px-8 sm:py-24">
           <p className="text-xs uppercase tracking-[0.2em] text-ochre">
             {isBackendJob ? "Ingesting" : "Uploading"}
           </p>
-          <h1 className="mt-2 font-serif text-4xl sm:text-5xl">{title}</h1>
+          <h1 className="mt-2 font-serif text-6xl leading-[0.95] sm:text-8xl">{title}</h1>
           <p className="mt-3 text-muted-foreground">
             {isBackendJob
               ? "FastAPI is processing images from Google Drive."
@@ -125,7 +130,7 @@ function ProgressPage() {
                 : "Preparing local photos for this browser session."}
           </p>
 
-          <div className="mt-10 rounded-2xl border border-border bg-paper p-8 shadow-soft">
+          <div className="mt-10 border-t-2 border-foreground bg-paper p-8 shadow-soft">
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {finished ? (
@@ -166,7 +171,11 @@ function ProgressPage() {
                       index < done ? "opacity-100" : "opacity-30"
                     }`}
                   >
-                    <img src={item.dataUrl} alt={item.name} className="h-full w-full object-cover" />
+                    <img
+                      src={item.dataUrl}
+                      alt={item.name}
+                      className="h-full w-full object-cover"
+                    />
                     {index < done && (
                       <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
                         <CheckCircle2 className="h-5 w-5 text-primary-foreground drop-shadow" />

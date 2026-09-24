@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Aperture } from "lucide-react";
+import { LogOut, ScanFace } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { signOut } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -22,15 +22,15 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/45 shadow-soft backdrop-blur-2xl supports-[backdrop-filter]:bg-background/35">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+    <header className="sticky top-0 z-40 border-b border-foreground/15 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80">
+      <div className="mx-auto flex h-[4.5rem] max-w-[90rem] items-center justify-between px-5 sm:px-8">
         <div className="flex items-center gap-6">
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   aria-label="Profile"
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-sunset text-primary-foreground shadow-soft transition-transform hover:scale-105"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background transition-transform hover:scale-105"
                 >
                   <span className="text-sm font-medium">{user.name.charAt(0).toUpperCase()}</span>
                 </button>
@@ -56,51 +56,76 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Link to="/" className="flex items-center gap-2">
-              <Aperture className="h-5 w-5 text-primary" />
-              <span className="font-serif text-xl">FaceSeek</span>
+            <Link to="/" className="flex items-center gap-2.5" aria-label="FaceSeek home">
+              <ScanFace className="h-5 w-5 text-primary" strokeWidth={1.7} />
+              <span className="text-sm font-bold uppercase tracking-[0.13em]">FaceSeek</span>
             </Link>
           )}
 
-          {showNav && user && (
-            <nav className="hidden items-center gap-5 text-sm md:flex">
-              <Link
-                to="/dashboard"
-                activeProps={{ className: "text-foreground" }}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Upload
-              </Link>
-              <Link
-                to="/query"
-                activeProps={{ className: "text-foreground" }}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Find by photo
-              </Link>
-              <Link
-                to="/about"
-                activeProps={{ className: "text-foreground" }}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                About
-              </Link>
+          {showNav && (
+            <nav className="hidden items-center gap-7 text-sm font-medium sm:flex">
+              {user ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    activeProps={{ className: "text-primary" }}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Upload
+                  </Link>
+                  <Link
+                    to="/query"
+                    activeProps={{ className: "text-primary" }}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Find by photo
+                  </Link>
+                  <Link
+                    to="/about"
+                    activeProps={{ className: "text-primary" }}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    About
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/"
+                    activeOptions={{ exact: true }}
+                    activeProps={{ className: "text-primary" }}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/demo"
+                    activeProps={{ className: "text-primary" }}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Demo
+                  </Link>
+                  <Link
+                    to="/about"
+                    activeProps={{ className: "text-primary" }}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    About
+                  </Link>
+                </>
+              )}
             </nav>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {user ? (
+        {user && (
+          <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </Button>
-          ) : (
-            <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground">
-              About
-            </Link>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </header>
   );

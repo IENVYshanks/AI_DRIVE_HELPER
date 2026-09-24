@@ -166,17 +166,19 @@ function DashboardPage() {
     <RequireAuth>
       <div className="min-h-screen bg-background">
         <SiteHeader />
-        <main className="mx-auto max-w-4xl px-5 py-10 sm:py-16">
+        <main className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-16">
           <div className="mb-10">
             <p className="text-xs uppercase tracking-[0.2em] text-ochre">Upload</p>
-            <h1 className="mt-2 font-serif text-4xl sm:text-5xl">Bring your photos home.</h1>
-            <p className="mt-3 max-w-xl text-muted-foreground">
+            <h1 className="mt-2 max-w-[12ch] font-serif text-6xl leading-[0.95] sm:text-8xl">
+              Bring your photos home.
+            </h1>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
               Drop images below, or pull them in from Google Drive. The Drive path is connected to
               the FastAPI backend.
             </p>
           </div>
 
-          <section className="mb-8 rounded-2xl border border-border bg-paper p-6 shadow-soft">
+          <section className="mb-8 border-t-2 border-foreground bg-paper p-6 shadow-soft">
             <div className="flex items-start gap-3">
               <HardDrive className="mt-1 h-5 w-5 text-primary" />
               <div>
@@ -234,7 +236,7 @@ function DashboardPage() {
             }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
-            className={`relative overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
+            className={`relative overflow-hidden border-2 border-dashed p-10 text-center transition-all ${
               dragOver ? "border-primary bg-primary/5" : "border-border bg-paper"
             }`}
           >

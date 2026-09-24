@@ -1,8 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Check,
   Copy,
   Images,
@@ -219,8 +218,8 @@ function DemoPage() {
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
-      <main className="mx-auto max-w-6xl px-5 py-8 sm:py-12">
-        <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-warm px-6 py-9 shadow-editorial sm:px-10 sm:py-12">
+      <main className="mx-auto max-w-[90rem] px-5 py-8 sm:px-8 sm:py-12">
+        <section className="relative overflow-hidden border-y border-foreground bg-background px-0 py-10 sm:py-14">
           <div
             className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-ochre/10 blur-3xl"
             aria-hidden
@@ -231,10 +230,10 @@ function DemoPage() {
                 <Sparkles className="h-3.5 w-3.5" aria-hidden />
                 Public demo
               </div>
-              <h1 className="mt-3 font-serif text-4xl leading-tight sm:text-6xl">
+              <h1 className="mt-3 max-w-[13ch] font-serif text-5xl leading-[0.95] sm:text-7xl lg:text-8xl">
                 Pick a face. Find every moment.
               </h1>
-              <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+              <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
                 Explore a fixed collection with precomputed matches. Nothing is uploaded and no live
                 face analysis runs in your browser.
               </p>
@@ -355,7 +354,7 @@ function DemoPage() {
             )}
           </div>
 
-          <aside className="h-fit rounded-2xl border border-border bg-paper p-5 shadow-soft lg:sticky lg:top-24">
+          <aside className="h-fit border-t-2 border-foreground bg-paper p-5 shadow-soft lg:sticky lg:top-24">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-ochre">Search studio</p>
@@ -537,14 +536,8 @@ function DemoPage() {
           </section>
         )}
 
-        <footer className="mt-14 flex flex-col justify-between gap-4 border-t border-border py-8 text-sm text-muted-foreground sm:flex-row sm:items-center">
+        <footer className="mt-14 border-t border-border py-8 text-sm text-muted-foreground">
           <p>This demo uses only approved, fixed photos and precomputed results.</p>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 font-medium text-foreground hover:text-clay"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back home
-          </Link>
         </footer>
       </main>
     </div>

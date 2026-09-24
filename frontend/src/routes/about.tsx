@@ -1,9 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import {
   Aperture,
   ArrowDown,
-  ArrowLeft,
   ArrowRight,
   BrainCircuit,
   Cloud,
@@ -172,7 +171,7 @@ function ArchitectureMap() {
         </div>
       </div>
 
-      <div className="mt-8 overflow-hidden rounded-3xl border border-border bg-paper p-5 shadow-editorial sm:p-8">
+      <div className="mt-8 overflow-hidden border-t-2 border-foreground bg-paper p-5 shadow-editorial sm:p-8">
         <div className="space-y-4">
           <Layer label="Experience">
             <div className="grid gap-3 md:grid-cols-2">
@@ -287,10 +286,10 @@ function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
-      <main className="mx-auto max-w-6xl px-5 py-12 sm:py-20">
+      <main className="mx-auto max-w-[90rem] px-5 py-12 sm:px-8 sm:py-20">
         <div className="max-w-3xl">
           <p className="text-xs uppercase tracking-[0.2em] text-ochre">About</p>
-          <h1 className="mt-3 font-serif text-5xl leading-tight tracking-tight sm:text-6xl">
+          <h1 className="mt-3 max-w-[13ch] font-serif text-6xl leading-[0.92] tracking-tight sm:text-8xl">
             A slower place for the photos that matter.
           </h1>
           <p className="mt-8 text-lg leading-relaxed text-muted-foreground">
@@ -371,15 +370,6 @@ function AboutPage() {
             </a>
           </div>
         </section>
-
-        <div className="mt-12">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back home
-          </Link>
-        </div>
       </main>
     </div>
   );
