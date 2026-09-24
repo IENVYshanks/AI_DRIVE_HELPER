@@ -3,8 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names backend,frontend --prefix-colors blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && ..\\.venv\\Scripts\\python.exe -m uvicorn main:app --reload",
-    "dev:frontend": "npm --prefix frontend run dev"
+    "dev:backend": "set \"ENVIRONMENT=development\" && set \"TASK_QUEUE_MODE=background\" && cd backend && ..\\.venv\\Scripts\\python.exe -m uvicorn main:app --reload --port 8080",
+    "dev:frontend": "npm --prefix frontend run dev -- --port 5173 --strictPort"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

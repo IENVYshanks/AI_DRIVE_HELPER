@@ -219,7 +219,14 @@ For the React frontend, also set:
 ```env
 VITE_BACKEND_URL=http://localhost:8000
 VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+VITE_ENABLE_GOOGLE_AUTH=false
 ```
+
+Set `VITE_ENABLE_GOOGLE_AUTH=true` to show the landing-page **Continue with
+Google** action. Keep it `false` to hide that action across the UI. Vite reads
+this flag at startup, so restart the frontend development server after changing
+it. The flag controls frontend visibility only; production access control must
+continue to be enforced by the backend.
 
 In Google Cloud Console, add these authorized JavaScript origins for local React development:
 
@@ -278,7 +285,10 @@ npm run dev
 ```
 
 Press `Ctrl+C` to stop both processes. The individual commands below are still
-available when you only need one part of the app.
+available when you only need one part of the app. The combined development
+launcher explicitly uses FastAPI's in-process background-task mode for ingestion,
+so Redis and a Celery worker are not required locally. Production continues to
+require `TASK_QUEUE_MODE=celery` and a durable Redis broker.
 
 ### 1. Start FastAPI
 

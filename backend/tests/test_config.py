@@ -16,6 +16,12 @@ OAUTH_ENCRYPTION_KEY = "11" * 32
 
 
 class ProductionSettingsTests(TestCase):
+    def test_development_defaults_to_background_tasks(self) -> None:
+        settings = Settings(**BASE_SETTINGS)
+
+        self.assertEqual(settings.ENVIRONMENT, "development")
+        self.assertEqual(settings.TASK_QUEUE_MODE, "background")
+
     def test_production_rejects_development_conveniences(self) -> None:
         with self.assertRaises(ValidationError) as context:
             Settings(
@@ -26,6 +32,7 @@ class ProductionSettingsTests(TestCase):
 
         message = str(context.exception)
         self.assertIn("AUTO_CREATE_TABLES must be false", message)
+        self.assertIn("TASK_QUEUE_MODE must be celery", message)
 
     def test_valid_production_configuration_is_accepted(self) -> None:
         settings = Settings(
