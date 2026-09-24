@@ -73,7 +73,7 @@ Do not infer approval from the original implementation request alone. If the use
 - Background work must create and close its own SQLAlchemy session. Never pass a request-scoped session into FastAPI background work or Celery tasks.
 - Keep development background execution and Celery execution behaviorally equivalent. Both paths call the same ingestion service entry point with identifiers, not ORM objects, tokens, or image bytes.
 - Keep protected operations scoped by authenticated `user_id` across Postgres queries and Qdrant filters. A record owned by another user must not be returned merely because its UUID is known.
-- Access tokens may authorize protected operations; refresh tokens may not. Google Drive tokens remain backend-only and must never be logged, returned unnecessarily, or placed in queue payloads.
+- Access tokens may authorize protected operations; refresh tokens may not. Google Drive tokens remain backend-only, use versioned authenticated encryption at rest, and must never be logged, returned unnecessarily, or placed in queue payloads.
 - Store durable identity and metadata in Postgres. Store image bytes in Supabase and face vectors in Qdrant. Signed object URLs are temporary response values and must not become canonical persisted identifiers.
 - Keep Qdrant vector payloads sufficient for user filtering and Postgres reconciliation. Coordinate vector writes and deletes with persisted face/image state so partial failures remain detectable and retryable.
 - Keep retries bounded and idempotent. Existing ingestion intentionally performs one retry pass for failed files; any change to attempts, backoff, duplicate handling, or terminal state requires explicit approval and tests.
@@ -90,7 +90,7 @@ Do not infer approval from the original implementation request alone. If the use
 - Keep application behavior environment-neutral. Express development, test, and production differences through validated settings and injected provider configuration, not scattered environment checks.
 - Load backend settings from process environment or `backend/.env`. Keep `backend/.env.example` synchronized when a key is added, removed, renamed, or changes meaning.
 - Expose only safe `VITE_*` values to the frontend. Keep `frontend/.env.example` synchronized and never place service-role, database, Qdrant, JWT, or OAuth-client secrets in frontend configuration.
-- Production must keep `AUTO_CREATE_TABLES=false`, `ALLOW_INSECURE_EMAIL_AUTH=false`, `TASK_QUEUE_MODE=celery`, explicit trusted hosts/CORS origins, complete Supabase settings, and a configured Celery broker.
+- Production must keep `AUTO_CREATE_TABLES=false`, `TASK_QUEUE_MODE=celery`, secure session cookies, explicit trusted hosts/CORS origins, complete Supabase and Google OAuth settings, configured OAuth token-encryption keys, and a configured Celery broker.
 - Apply Alembic migrations as a dedicated deployment step before starting code that depends on them. Do not run migrations automatically in every API or worker replica.
 - Keep migrations compatible with the currently deployed and immediately previous application version where rolling deployment is expected. Use expand/migrate/contract sequencing for destructive schema changes.
 - Keep `backend/schema.sql` synchronized as the documented full-schema reference, but treat Alembic revisions as deployment authority.

@@ -21,6 +21,11 @@ from sqlalchemy.orm import Session
 
 from src.db.config import get_settings
 from src.models.users import User
+from src.services.oauth_token_cipher import (
+    decrypt_oauth_token,
+    encrypt_oauth_token,
+    oauth_token_needs_rotation,
+)
 
 logger = logging.getLogger(__name__)
 FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
@@ -56,9 +61,26 @@ def get_drive_service(user_id, db: Session):
     if expiry is not None and expiry.tzinfo is not None:
         expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
 
+    access_token = decrypt_oauth_token(user.drive_access_token, settings)
+    refresh_token = (
+        decrypt_oauth_token(user.drive_refresh_token, settings)
+        if user.drive_refresh_token
+        else None
+    )
+    credentials_changed = False
+    if oauth_token_needs_rotation(user.drive_access_token, settings):
+        user.drive_access_token = encrypt_oauth_token(access_token, settings)
+        credentials_changed = True
+    if user.drive_refresh_token and oauth_token_needs_rotation(
+        user.drive_refresh_token,
+        settings,
+    ):
+        user.drive_refresh_token = encrypt_oauth_token(refresh_token, settings)
+        credentials_changed = True
+
     credentials = Credentials(
-        token=user.drive_access_token,
-        refresh_token=user.drive_refresh_token,
+        token=access_token,
+        refresh_token=refresh_token,
         token_uri="https://oauth2.googleapis.com/token",
         client_id=settings.GOOGLE_CLIENT_ID,
         client_secret=settings.GOOGLE_CLIENT_SECRET,
@@ -68,12 +90,19 @@ def get_drive_service(user_id, db: Session):
         if not credentials.refresh_token or not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
             raise ValueError("Google Drive authorization has expired; sign in again")
         credentials.refresh(GoogleAuthRequest())
-        user.drive_access_token = credentials.token
+        user.drive_access_token = encrypt_oauth_token(credentials.token, settings)
+        if credentials.refresh_token:
+            user.drive_refresh_token = encrypt_oauth_token(
+                credentials.refresh_token,
+                settings,
+            )
         if credentials.expiry is not None:
             refreshed_expiry = credentials.expiry
             if refreshed_expiry.tzinfo is None:
                 refreshed_expiry = refreshed_expiry.replace(tzinfo=timezone.utc)
             user.token_expires_at = refreshed_expiry
+        credentials_changed = True
+    if credentials_changed:
         db.commit()
     return build("drive", "v3", credentials=credentials)
 

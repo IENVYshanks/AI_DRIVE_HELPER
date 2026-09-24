@@ -1,6 +1,7 @@
 """Typed environment configuration and SQLAlchemy declarative base."""
 
 from functools import lru_cache
+import re
 from urllib.parse import quote_plus
 
 from pydantic import computed_field, field_validator, model_validator
@@ -63,6 +64,8 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
     GOOGLE_REDIRECT_URI: str | None = None
+    OAUTH_TOKEN_ENCRYPTION_KEYS: str = ""
+    OAUTH_TOKEN_ACTIVE_KEY_ID: str = ""
 
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None
@@ -109,6 +112,16 @@ class Settings(BaseSettings):
         )
         if not all(google_oauth_values):
             errors.append("all Google OAuth settings are required")
+
+        try:
+            encryption_keys = self.oauth_token_encryption_keys
+        except ValueError as exc:
+            errors.append(str(exc))
+        else:
+            if not encryption_keys:
+                errors.append("OAUTH_TOKEN_ENCRYPTION_KEYS is required")
+            if self.OAUTH_TOKEN_ACTIVE_KEY_ID not in encryption_keys:
+                errors.append("OAUTH_TOKEN_ACTIVE_KEY_ID must select a configured key")
 
         if errors:
             raise ValueError("Invalid production configuration: " + "; ".join(errors))
@@ -192,6 +205,28 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Return whether strict production behavior should be enabled."""
         return self.ENVIRONMENT == "production"
+
+    @property
+    def oauth_token_encryption_keys(self) -> dict[str, bytes]:
+        """Parse key-id/hex-key pairs used for OAuth credential encryption."""
+        keys: dict[str, bytes] = {}
+        for raw_entry in self.OAUTH_TOKEN_ENCRYPTION_KEYS.split(","):
+            entry = raw_entry.strip()
+            if not entry:
+                continue
+            key_id, separator, hex_key = entry.partition(":")
+            if not separator or not re.fullmatch(r"[A-Za-z0-9._-]+", key_id):
+                raise ValueError("OAuth token encryption key entries are invalid")
+            if key_id in keys:
+                raise ValueError("OAuth token encryption key IDs must be unique")
+            try:
+                key = bytes.fromhex(hex_key)
+            except ValueError as exc:
+                raise ValueError("OAuth token encryption keys must be hexadecimal") from exc
+            if len(key) != 32:
+                raise ValueError("OAuth token encryption keys must contain 32 bytes")
+            keys[key_id] = key
+        return keys
 
 
 @lru_cache

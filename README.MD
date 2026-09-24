@@ -209,6 +209,8 @@ BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:5173
+OAUTH_TOKEN_ENCRYPTION_KEYS=primary:replace_with_64_hex_characters
+OAUTH_TOKEN_ACTIVE_KEY_ID=primary
 ```
 
 For the React frontend, also set:
@@ -228,7 +230,10 @@ http://127.0.0.1:5173
 Use the same Google OAuth client ID in the backend and React configuration. Keep the
 client secret backend-only. Configure `GOOGLE_REDIRECT_URI` as an authorized JavaScript
 origin in Google Cloud Console; the popup flow sends its one-time authorization code to
-the backend, which exchanges it for Google tokens.
+the backend, which exchanges it for Google tokens. Generate the OAuth credential-encryption
+key with `python -c "import secrets; print(secrets.token_hex(32))"`. Keep the active key and
+any previous decryption keys in a secret manager; removing an old key before its stored
+tokens have rotated makes those credentials unreadable.
 
 ## Installation
 
@@ -250,8 +255,9 @@ npm install
 ## Database Schema
 
 Apply your schema to Postgres before running the backend. Existing installations must
-run the Alembic migrations that create the `auth_sessions` table and the active-job
-uniqueness guard:
+configure OAuth token encryption keys, then run the Alembic migrations that create the
+`auth_sessions` table, add the active-job uniqueness guard, and encrypt existing Google
+Drive credentials:
 
 ```powershell
 Set-Location backend
@@ -359,6 +365,8 @@ LOG_LEVEL=INFO
 - Never commit `.env`
 - Rotate any Google, Supabase, Qdrant, or database credentials if they were ever exposed
 - Keep `SUPABASE_SERVICE_ROLE_KEY` backend-only
+- Keep every configured OAuth token-encryption key in a secret manager until all values
+  written with that key have been rotated to the active key
 
 ## Current Limitations
 

@@ -6,6 +6,10 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 
 from src.services.drive_service import get_drive_service
+from src.services.oauth_token_cipher import decrypt_oauth_token, encrypt_oauth_token
+
+
+OAUTH_ENCRYPTION_KEY = "11" * 32
 
 
 class DriveServiceTests(TestCase):
@@ -20,13 +24,24 @@ class DriveServiceTests(TestCase):
         google_request,
         build,
     ) -> None:
-        settings.return_value = SimpleNamespace(
+        encryption_settings = SimpleNamespace(
             GOOGLE_CLIENT_ID="client-id",
             GOOGLE_CLIENT_SECRET="client-secret",
+            OAUTH_TOKEN_ACTIVE_KEY_ID="primary",
+            oauth_token_encryption_keys={
+                "primary": bytes.fromhex(OAUTH_ENCRYPTION_KEY),
+            },
         )
+        settings.return_value = encryption_settings
         user = SimpleNamespace(
-            drive_access_token="expired-token",
-            drive_refresh_token="refresh-token",
+            drive_access_token=encrypt_oauth_token(
+                "expired-token",
+                encryption_settings,
+            ),
+            drive_refresh_token=encrypt_oauth_token(
+                "refresh-token",
+                encryption_settings,
+            ),
             token_expires_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
         db = Mock()
@@ -45,6 +60,10 @@ class DriveServiceTests(TestCase):
 
         self.assertIs(result, drive_client)
         credentials.refresh.assert_called_once_with(google_request.return_value)
-        self.assertEqual(user.drive_access_token, "refreshed-token")
+        self.assertNotIn("refreshed-token", user.drive_access_token)
+        self.assertEqual(
+            decrypt_oauth_token(user.drive_access_token, encryption_settings),
+            "refreshed-token",
+        )
         self.assertEqual(user.token_expires_at.tzinfo, timezone.utc)
         db.commit.assert_called_once_with()

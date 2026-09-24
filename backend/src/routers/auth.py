@@ -16,6 +16,11 @@ from src.services.google_oauth_service import (
     exchange_authorization_code,
 )
 from src.services.keys import get_tokens
+from src.services.oauth_token_cipher import (
+    OAuthTokenEncryptionError,
+    encrypt_oauth_token,
+    validate_oauth_token_encryption,
+)
 from src.services.session_service import (
     ACCESS_COOKIE_NAME,
     CSRF_COOKIE_NAME,
@@ -111,7 +116,11 @@ def clear_session_cookies(response: Response, settings: Settings) -> None:
     response.headers["Cache-Control"] = "no-store"
 
 
-def persist_google_session(db: Session, google_session: GoogleOAuthSession) -> User:
+def persist_google_session(
+    db: Session,
+    google_session: GoogleOAuthSession,
+    settings: Settings,
+) -> User:
     """Create or update a user by stable Google subject, never by email alone."""
     user = db.query(User).filter(User.google_id == google_session.subject).first()
     email_owner = db.query(User).filter(User.email == google_session.email).first()
@@ -145,8 +154,12 @@ def persist_google_session(db: Session, google_session: GoogleOAuthSession) -> U
         user.name = google_session.name or user.name
         user.avatar_url = google_session.avatar_url or user.avatar_url
 
-    user.drive_access_token = google_session.access_token
-    user.drive_refresh_token = google_session.refresh_token or user.drive_refresh_token
+    user.drive_access_token = encrypt_oauth_token(google_session.access_token, settings)
+    if google_session.refresh_token:
+        user.drive_refresh_token = encrypt_oauth_token(
+            google_session.refresh_token,
+            settings,
+        )
     user.token_expires_at = google_session.expires_at
     try:
         db.commit()
@@ -176,6 +189,13 @@ async def create_google_session(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Google OAuth is not configured",
         )
+    try:
+        validate_oauth_token_encryption(settings)
+    except OAuthTokenEncryptionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth credential encryption is not configured",
+        ) from exc
     if (
         payload.redirect_uri.rstrip("/") != configured_redirect
         or request_origin != configured_redirect
@@ -200,7 +220,18 @@ async def create_google_session(
             detail="Google authorization failed",
         ) from exc
 
-    user = await run_in_threadpool(persist_google_session, db, google_session)
+    try:
+        user = await run_in_threadpool(
+            persist_google_session,
+            db,
+            google_session,
+            settings,
+        )
+    except OAuthTokenEncryptionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OAuth credentials could not be protected",
+        ) from exc
     session_credentials = await run_in_threadpool(create_session, db, user)
     set_session_cookies(response, session_credentials, settings)
     return GoogleSessionResponse(user=user_response(user))

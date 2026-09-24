@@ -12,6 +12,7 @@ BASE_SETTINGS = {
     "DB_PASSWORD": "database-secret",
     "DB_NAME": "app",
 }
+OAUTH_ENCRYPTION_KEY = "11" * 32
 
 
 class ProductionSettingsTests(TestCase):
@@ -43,6 +44,8 @@ class ProductionSettingsTests(TestCase):
             GOOGLE_CLIENT_SECRET="google-client-secret",
             GOOGLE_REDIRECT_URI="https://app.example.com",
             SESSION_COOKIE_SECURE=True,
+            OAUTH_TOKEN_ENCRYPTION_KEYS=f"primary:{OAUTH_ENCRYPTION_KEY}",
+            OAUTH_TOKEN_ACTIVE_KEY_ID="primary",
         )
 
         self.assertTrue(settings.is_production)
@@ -52,3 +55,13 @@ class ProductionSettingsTests(TestCase):
     def test_invalid_environment_name_is_rejected(self) -> None:
         with self.assertRaises(ValidationError):
             Settings(**BASE_SETTINGS, ENVIRONMENT="prod")
+
+    def test_rejects_invalid_oauth_encryption_key_material(self) -> None:
+        settings = Settings(
+            **BASE_SETTINGS,
+            OAUTH_TOKEN_ENCRYPTION_KEYS="primary:not-a-32-byte-hex-key",
+            OAUTH_TOKEN_ACTIVE_KEY_ID="primary",
+        )
+
+        with self.assertRaisesRegex(ValueError, "hexadecimal"):
+            _ = settings.oauth_token_encryption_keys

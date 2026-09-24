@@ -30,6 +30,7 @@ CREATE TABLE users (
     avatar_url TEXT,
 
     google_id TEXT UNIQUE,
+    -- Versioned AES-256-GCM ciphertext envelopes; never plaintext credentials.
     drive_access_token TEXT,
     drive_refresh_token TEXT,
     token_expires_at TIMESTAMPTZ,

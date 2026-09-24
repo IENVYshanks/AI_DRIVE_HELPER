@@ -14,7 +14,19 @@ from src.db.config import get_settings
 from src.db.database import get_db
 from src.routers.auth import persist_google_session
 from src.services.google_oauth_service import GoogleOAuthSession
+from src.services.oauth_token_cipher import decrypt_oauth_token
 from src.services.session_service import InvalidSessionError, SessionCredentials
+
+OAUTH_ENCRYPTION_KEY = "11" * 32
+
+
+def token_settings():
+    return SimpleNamespace(
+        OAUTH_TOKEN_ACTIVE_KEY_ID="primary",
+        oauth_token_encryption_keys={
+            "primary": bytes.fromhex(OAUTH_ENCRYPTION_KEY),
+        },
+    )
 
 
 def google_session() -> GoogleOAuthSession:
@@ -36,7 +48,7 @@ class GoogleSessionTests(TestCase):
         db.query.return_value.filter.return_value.first.side_effect = [None, existing]
 
         with self.assertRaises(HTTPException) as context:
-            persist_google_session(db, google_session())
+            persist_google_session(db, google_session(), token_settings())
 
         self.assertEqual(context.exception.status_code, 409)
         db.commit.assert_not_called()
@@ -50,10 +62,29 @@ class GoogleSessionTests(TestCase):
         db.query.return_value.filter.return_value.first.side_effect = [inactive, inactive]
 
         with self.assertRaises(HTTPException) as context:
-            persist_google_session(db, google_session())
+            persist_google_session(db, google_session(), token_settings())
 
         self.assertEqual(context.exception.status_code, 401)
         db.commit.assert_not_called()
+
+    def test_persists_only_encrypted_google_credentials(self) -> None:
+        db = Mock()
+        db.query.return_value.filter.return_value.first.side_effect = [None, None]
+        settings = token_settings()
+
+        user = persist_google_session(db, google_session(), settings)
+
+        self.assertNotIn("drive-access-token", user.drive_access_token)
+        self.assertNotIn("drive-refresh-token", user.drive_refresh_token)
+        self.assertEqual(
+            decrypt_oauth_token(user.drive_access_token, settings),
+            "drive-access-token",
+        )
+        self.assertEqual(
+            decrypt_oauth_token(user.drive_refresh_token, settings),
+            "drive-refresh-token",
+        )
+        db.commit.assert_called_once_with()
 
     @patch("src.routers.auth.exchange_authorization_code")
     def test_rejects_request_from_unconfigured_origin_before_exchange(self, exchange) -> None:
@@ -65,6 +96,10 @@ class GoogleSessionTests(TestCase):
                 "GOOGLE_CLIENT_ID": "client-id",
                 "GOOGLE_CLIENT_SECRET": "client-secret",
                 "GOOGLE_REDIRECT_URI": "http://localhost:5173",
+                "OAUTH_TOKEN_ENCRYPTION_KEYS": (
+                    f"primary:{OAUTH_ENCRYPTION_KEY}"
+                ),
+                "OAUTH_TOKEN_ACTIVE_KEY_ID": "primary",
             }
         )
         app = create_app(settings)
@@ -102,6 +137,10 @@ class GoogleSessionTests(TestCase):
                 "GOOGLE_CLIENT_SECRET": "client-secret",
                 "GOOGLE_REDIRECT_URI": "http://localhost:5173",
                 "SESSION_COOKIE_SECURE": False,
+                "OAUTH_TOKEN_ENCRYPTION_KEYS": (
+                    f"primary:{OAUTH_ENCRYPTION_KEY}"
+                ),
+                "OAUTH_TOKEN_ACTIVE_KEY_ID": "primary",
             }
         )
         app = create_app(settings)
