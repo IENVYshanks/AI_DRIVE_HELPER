@@ -53,6 +53,8 @@ node_modules/
 **/.output/
 .nitro/
 **/.nitro/
+.vercel/
+**/.vercel/
 dist/
 **/dist/
 dist-ssr/

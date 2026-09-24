@@ -6,6 +6,4 @@
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-const isVercelBuild = process.env.VERCEL === "1";
-
-export default defineConfig(isVercelBuild ? { cloudflare: false } : {});
+export default defineConfig();
