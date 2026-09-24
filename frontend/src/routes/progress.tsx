@@ -12,7 +12,7 @@ import { addPhotos, type StoredPhoto } from "@/lib/photo-store";
 export const Route = createFileRoute("/progress")({
   head: () => ({
     meta: [
-      { title: "Uploading - Atelier" },
+      { title: "Uploading — FaceSeek" },
       { name: "description", content: "Your photos are arriving." },
     ],
   }),

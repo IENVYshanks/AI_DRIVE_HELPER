@@ -9,8 +9,10 @@ import {
   Cloud,
   Database,
   FolderInput,
+  Github,
   Heart,
   Images,
+  Mail,
   Search,
   Server,
   ShieldCheck,
@@ -23,15 +25,15 @@ import { SiteHeader } from "@/components/site-header";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "About — Atelier" },
+      { title: "About — FaceSeek" },
       {
         name: "description",
-        content: "The mission, architecture, and technology behind Atelier.",
+        content: "The mission, architecture, and technology behind FaceSeek.",
       },
-      { property: "og:title", content: "About — Atelier" },
+      { property: "og:title", content: "About — FaceSeek" },
       {
         property: "og:description",
-        content: "See how Atelier turns photos into a private, searchable face index.",
+        content: "See how FaceSeek turns photos into a private, searchable face index.",
       },
     ],
   }),
@@ -291,7 +293,7 @@ function AboutPage() {
             A slower place for the photos that matter.
           </h1>
           <p className="mt-8 text-lg leading-relaxed text-muted-foreground">
-            Atelier is a quiet photo archive built on the belief that images deserve more than an
+            FaceSeek is a quiet photo archive built on the belief that images deserve more than an
             endless feed. We help you collect, keep, and rediscover your pictures—not perform them.
           </p>
         </div>
@@ -333,8 +335,33 @@ function AboutPage() {
           <p className="font-serif text-2xl leading-snug">
             &ldquo;Every picture is a time machine. We just built the doorbell.&rdquo;
           </p>
-          <p className="mt-3 text-sm text-muted-foreground">— The Atelier team</p>
+          <p className="mt-3 text-sm text-muted-foreground">— FaceSeek</p>
         </div>
+
+        <section className="mt-8 rounded-2xl border border-border bg-paper p-8 shadow-soft">
+          <p className="text-xs uppercase tracking-[0.2em] text-ochre">Creator</p>
+          <h2 className="mt-3 font-serif text-3xl">Built by IENVYshanks</h2>
+          <p className="mt-3 max-w-2xl leading-relaxed text-muted-foreground">
+            FaceSeek is an open-source project exploring private, useful face-similarity search
+            across personal photo collections.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <a
+              href="https://github.com/IENVYshanks"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Github className="h-4 w-4" aria-hidden /> GitHub
+            </a>
+            <a
+              href="mailto:sawaiyanronit12@gmail.com"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Mail className="h-4 w-4" aria-hidden /> Contact
+            </a>
+          </div>
+        </section>
 
         <div className="mt-12">
           <Link

@@ -32,10 +32,10 @@ import {
 export const Route = createFileRoute("/demo")({
   head: () => ({
     meta: [
-      { title: "Face search demo - Atelier" },
+      { title: "Face search demo — FaceSeek" },
       {
         name: "description",
-        content: "Explore how Atelier finds the same person across a fixed photo collection.",
+        content: "Explore how FaceSeek finds the same person across a fixed photo collection.",
       },
     ],
   }),
@@ -204,8 +204,8 @@ function DemoPage() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "Atelier face search demo",
-          text: "Try Atelier's private, precomputed face search demo.",
+          title: "FaceSeek face search demo",
+          text: "Try FaceSeek's private, precomputed face search demo.",
           url: window.location.href,
         });
         return;

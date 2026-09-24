@@ -1,4 +1,4 @@
-﻿# AI Image Classifier: Complete Project Questions and Answers
+﻿# FaceSeek: Complete Project Questions and Answers
 
 This document explains the current repository as implemented. It covers the main product flows, small implementation details, operational behavior, edge cases, and known gaps. When this document says â€œcurrently,â€ it refers to the code in this repository, not a planned feature.
 

@@ -1,6 +1,12 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "faceseek-web",
   "private": true,
+  "author": "IENVYshanks <sawaiyanronit12@gmail.com>",
+  "homepage": "https://ai-drive-helper.vercel.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IENVYshanks/ai_image_classifier.git"
+  },
   "sideEffects": false,
   "type": "module",
   "scripts": {

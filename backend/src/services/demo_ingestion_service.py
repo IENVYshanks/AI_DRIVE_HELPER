@@ -89,7 +89,7 @@ def ingest_demo_assets(
 
     user = db.query(User).filter(User.email == user_email).first()
     if user is None:
-        user = User(email=user_email, name="Atelier Demo")
+        user = User(email=user_email, name="FaceSeek Demo")
         db.add(user)
         db.flush()
 

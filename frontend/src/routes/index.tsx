@@ -11,7 +11,7 @@ import heroImage from "@/assets/hero-photos.jpg";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Atelier — Photos that find each other" },
+      { title: "FaceSeek — Find every face, rediscover every photo" },
       {
         name: "description",
         content: "Explore a face-search demo and rediscover related photos from one frame.",
@@ -61,10 +61,10 @@ function LandingPage() {
         <div className="w-full">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Aperture className="h-4 w-4 text-primary" />
-            <span className="uppercase tracking-widest">Atelier</span>
+            <span className="uppercase tracking-widest">FaceSeek</span>
           </div>
           <h1 className="mt-5 max-w-3xl font-serif text-5xl leading-[1.05] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
-            Photos that <em className="text-clay not-italic">find</em> each other.
+            Find every <em className="text-clay not-italic">face</em>. Rediscover every photo.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground">
             Explore a curated photo collection and discover every moment featuring the person you

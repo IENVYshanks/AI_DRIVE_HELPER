@@ -1,6 +1,6 @@
-# AI Image Classifier
+# FaceSeek
 
-AI Image Classifier is a full-stack face search application that:
+FaceSeek is a full-stack face-similarity search application that:
 
 - authenticates users with Google in the React frontend
 - browses Google Drive folders
@@ -10,6 +10,14 @@ AI Image Classifier is a full-stack face search application that:
 - stores app metadata in Postgres
 - stores image files in Supabase Storage
 - lets users query similar faces using either an uploaded photo or one of their already ingested photos
+
+## Creator
+
+Built and maintained by [IENVYshanks](https://github.com/IENVYshanks).
+
+- Email: [sawaiyanronit12@gmail.com](mailto:sawaiyanronit12@gmail.com)
+- Source: [github.com/IENVYshanks/ai_image_classifier](https://github.com/IENVYshanks/ai_image_classifier)
+- Live app: [ai-drive-helper.vercel.app](https://ai-drive-helper.vercel.app/)
 
 ## Stack
 

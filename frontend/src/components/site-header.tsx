@@ -58,7 +58,7 @@ export function SiteHeader({ showNav = true }: { showNav?: boolean }) {
           ) : (
             <Link to="/" className="flex items-center gap-2">
               <Aperture className="h-5 w-5 text-primary" />
-              <span className="font-serif text-xl">Atelier</span>
+              <span className="font-serif text-xl">FaceSeek</span>
             </Link>
           )}
 

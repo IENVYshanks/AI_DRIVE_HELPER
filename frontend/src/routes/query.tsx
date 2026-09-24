@@ -22,7 +22,7 @@ import { fileToDataUrl } from "@/lib/photo-store";
 export const Route = createFileRoute("/query")({
   head: () => ({
     meta: [
-      { title: "Find by photo - Atelier" },
+      { title: "Find by photo — FaceSeek" },
       { name: "description", content: "Show us a photo, find the ones that look like it." },
     ],
   }),

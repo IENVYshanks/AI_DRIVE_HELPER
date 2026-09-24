@@ -37,7 +37,7 @@ import { fileToDataUrl } from "@/lib/photo-store";
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "Upload - Atelier" },
+      { title: "Upload — FaceSeek" },
       { name: "description", content: "Upload photos from your device or Google Drive." },
     ],
   }),

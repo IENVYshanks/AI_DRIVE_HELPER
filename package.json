@@ -1,6 +1,12 @@
 {
-  "name": "ai-image-classifier",
+  "name": "faceseek",
   "private": true,
+  "author": "IENVYshanks <sawaiyanronit12@gmail.com>",
+  "homepage": "https://ai-drive-helper.vercel.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IENVYshanks/ai_image_classifier.git"
+  },
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names backend,frontend --prefix-colors blue,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "set \"ENVIRONMENT=development\" && set \"TASK_QUEUE_MODE=background\" && cd backend && ..\\.venv\\Scripts\\python.exe -m uvicorn main:app --reload --port 8080",

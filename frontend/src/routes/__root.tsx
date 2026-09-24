@@ -30,10 +30,17 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Atelier — Photos that find each other" },
-      { name: "description", content: "Upload your photos and rediscover them by image search." },
-      { property: "og:title", content: "Atelier — Photos that find each other" },
-      { property: "og:description", content: "Upload your photos and rediscover them by image search." },
+      { title: "FaceSeek — Find every face, rediscover every photo" },
+      {
+        name: "description",
+        content: "Search your private photo collection using secure face-similarity matching.",
+      },
+      { property: "og:title", content: "FaceSeek — Find every face, rediscover every photo" },
+      {
+        property: "og:description",
+        content: "Search your private photo collection using secure face-similarity matching.",
+      },
+      { name: "author", content: "IENVYshanks" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
